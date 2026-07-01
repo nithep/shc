@@ -1,27 +1,28 @@
-# Hotel ECS Integration Project
+# โปรเจกต์เชื่อมต่อระบบ Hotel ECS
 
-## 🏨 Context & Objectives
-This project is a **Smart Hotel Self Check-in/Check-out System**. 
-It replaces the legacy PC-based "Room Manager" software with a modern Web Application. The system runs on a **Raspberry Pi Zero 2 W** and interfaces with the existing hotel PBX (Phonik ECS-103R V.5) to control the power relays in each guest room.
+## 🏨 บริบทและเป้าหมาย
+โปรเจกต์นี้คือ **ระบบ Smart Hotel Self Check-in/Check-out**
+ซึ่งจะมาแทนที่ซอฟต์แวร์ "Room Manager" เดิมที่รันบน PC ด้วย Web Application ที่ทันสมัย ระบบนี้ทำงานบน **Raspberry Pi Zero 2 W** และเชื่อมต่อกับตู้สาขาของโรงแรม (Phonik ECS-103R V.5) เพื่อควบคุมรีเลย์ไฟฟ้าในแต่ละห้องพัก
 
-## 🔄 Core Workflow
-1. **Check-in**: A guest scans a QR code via the Frontend Web App to check into their room.
-2. **Relay Activation (ON)**: The Backend receives the check-in request and uses the PBX Connector to send an "ON" command to the PBX. The PBX then signals the ECS-103R board in the room to enable the power relay circuit. (The lights will turn on once the guest inserts their keycard).
-3. **Check-out**: The guest initiates a check-out via the Web App.
-4. **Relay Deactivation (OFF)**: The Backend sends an "OFF" command to the PBX. The room's power is completely cut off immediately, regardless of the keycard status.
+## 🔄 ขั้นตอนการทำงานหลัก (Core Workflow)
+1. **Check-in**: แขกสแกน QR Code ผ่านหน้าเว็บ Frontend เพื่อเช็คอินเข้าห้องพัก
+2. **เปิดระบบไฟ (ON)**: Backend รับคำสั่งเช็คอินและสั่งให้ PBX Connector ส่งคำสั่ง "ON" ไปที่ตู้สาขา PBX จากนั้นตู้จะส่งสัญญาณไปยังบอร์ด ECS-103R ในห้องเพื่อจ่ายไฟเข้าวงจร (ไฟจะสว่างขึ้นเมื่อแขกเสียบคีย์การ์ด)
+3. **Check-out**: แขกกดทำรายการเช็คเอาท์ผ่านหน้าเว็บ
+4. **ตัดระบบไฟ (OFF)**: Backend ส่งคำสั่ง "OFF" ไปที่ PBX ไฟในห้องจะถูกตัดทันที ไม่ว่าแขกจะเสียบคีย์การ์ดคาไว้หรือไม่ก็ตาม
 
-## 🖥️ System Architecture
-- **Central Server**: Raspberry Pi Zero 2 W.
-- **Room Hardware**: Phonik ECS-103R V.5 board (controls 220V relays).
-- **Communication Hub**: Phonik PBX (ตู้สาขา). The Pi Z2W connects to this PBX via Serial RS-232 or LAN.
+## 🖥️ สถาปัตยกรรมระบบ (System Architecture)
+- **เซิร์ฟเวอร์หลัก**: Raspberry Pi Zero 2 W
+- **ฮาร์ดแวร์ในห้อง**: บอร์ด Phonik ECS-103R V.5 (สำหรับควบคุมรีเลย์ 220V)
+- **ศูนย์กลางการสื่อสาร**: ตู้สาขา Phonik PBX ตัว Pi Z2W จะเชื่อมต่อกับตู้ผ่านพอร์ต Serial RS-232 หรือ LAN
 
-## 📁 Directory Structure
-- `/frontend`: The Web Dashboard for hotel staff and the Self Check-in interface for guests (React/Vite). Must be highly aesthetic and premium.
-- `/backend`: The API Server (Node.js/Python) handling business logic, database, and REST endpoints.
-- `/pbx-connector`: Low-level scripts handling the actual protocol decoding and serial/TCP communication with the Phonik PBX.
+## 📁 โครงสร้างโฟลเดอร์ (Directory Structure)
+- `/frontend`: Web Dashboard สำหรับพนักงานและหน้า Self Check-in สำหรับแขก (สร้างด้วย React/Vite) **หน้าตาต้องสวยงามและดูพรีเมียมขั้นสุด**
+- `/backend`: API Server (Node.js/Python) สำหรับจัดการ Business Logic, ฐานข้อมูล, และ REST endpoints
+- `/pbx-connector`: สคริปต์ระดับล่างสำหรับถอดรหัส Protocol และการสื่อสารผ่าน Serial/TCP กับตู้ Phonik PBX
 
-## 🤖 AI Agent Guidelines (For Jules & other Coding Agents)
-- **Language**: Always communicate with the user in Thai (ภาษาไทย).
-- **Tone**: Professional, senior software engineer.
-- **Frontend Design Rules**: Prioritize visual excellence. Use rich aesthetics, modern typography, sleek dark modes, and micro-animations. The UI must feel premium. Do not settle for basic MVPs.
-- **Execution**: When assigned a task, focus on your specific directory (`frontend`, `backend`, or `pbx-connector`). Keep code modular and thoroughly document the PBX protocol logic as it is discovered.
+## 🤖 แนวทางปฏิบัติสำหรับ AI Agent (สำหรับ Jules และ Agent ตัวอื่นๆ)
+- **ภาษา (Language)**: สื่อสารกับผู้ใช้เป็นภาษาไทย (ภาษาไทย) เสมอ เอกสาร (Documentation), คู่มือ (READMEs), การตั้งค่าทักษะ (Skills), Artifacts และโน้ตต่างๆ **จะต้องถูกเขียนเป็นภาษาไทยเท่านั้น**
+- **น้ำเสียง (Tone)**: เป็นมืออาชีพ ให้คำปรึกษาแบบ Senior Software Engineer
+- **กฎการออกแบบ Frontend (Frontend Design Rules)**: ให้ความสำคัญกับความสวยงามเป็นอันดับหนึ่ง ใช้สีสันที่ดูแพง, ฟอนต์สมัยใหม่, โหมดดาร์กโหมดที่ดูโฉบเฉี่ยว และแอนิเมชันเล็กๆ น้อยๆ เพื่อให้ UI ดูพรีเมียม ห้ามทำแค่ MVP พื้นๆ เด็ดขาด
+- **การทำงาน (Execution)**: เมื่อได้รับมอบหมายงาน ให้โฟกัสเฉพาะโฟลเดอร์ที่เกี่ยวข้อง (`frontend`, `backend` หรือ `pbx-connector`) เขียนโค้ดให้เป็นสัดส่วน (Modular) และต้องทำเอกสารอธิบายการทำงานของ PBX Protocol อย่างละเอียดเมื่อค้นพบข้อมูลใหม่ๆ
+- **สไตล์การแก้ปัญหา (Troubleshooting Style)**: เมื่อเจอปัญหา (Error) หรือบั๊ก ต้องใช้วิธีคิดวิเคราะห์เป็นขั้นเป็นตอน (Step-by-step analytical approach) โดยสรุปปัญหาให้ผู้ใช้ฟังแบบเข้าใจง่าย (เช่น สรุปสาเหตุหลัก และบอกวิธีแก้เป็นข้อๆ ที่ก๊อปปี้ไปวางใช้งานได้ทันที) หลีกเลี่ยงการตอบแบบกำกวม และให้กำลังใจผู้ใช้อยู่เสมอ
