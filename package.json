@@ -1,0 +1,16 @@
+{
+  "name": "hotel-ecs-workspace",
+  "version": "1.0.0",
+  "description": "Hotel ECS Check-in System Root Workspace",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend && npm install --prefix pbx-connector",
+    "dev:simulator": "node pbx-connector/simulator/pbx-simulator.js --port 10001",
+    "dev:backend": "cross-env PBX_MODE=tcp PBX_HOST=127.0.0.1 PBX_PORT=10001 npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev": "concurrently -n \"PBX,API,WEB\" -c \"bgBlue.bold,bgMagenta.bold,bgCyan.bold\" \"npm run dev:simulator\" \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  }
+}
