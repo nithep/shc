@@ -1,3 +1,15 @@
+```text
+ ⚡ ========================================================================= ⚡
+    _  _   ___  _____ _____ _     ___   ___  ___ 
+   | || | / _ \|_   _| ____| |   | ___|/ __|/ __|
+   | || || | | | | | |  _| | |   | _| | (__ \__ \
+   |_||_||_| |_| |_| |___|_|___|_|___|\___|___/
+   
+           --- HOTEL ENERGY CONTROL SERVER ---
+               Powered by [ nithep.com ]
+ ⚡ ========================================================================= ⚡
+```
+
 # 🏨 Hotel ECS (Smart Hotel Self Check-in)
 
 ![Hotel ECS Banner](https://img.shields.io/badge/Status-In%20Development-blue) ![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%204-red) ![Hardware](https://img.shields.io/badge/Hardware-Phonik%20PBX%20ECS--103R-green)
