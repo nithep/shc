@@ -23,6 +23,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.obsidian/
 
 # Deployment
 deploy-*.zip
