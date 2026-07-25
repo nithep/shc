@@ -35,8 +35,13 @@
 | `/worker` | โมดูลสำหรับการประมวลผล Agentic tasks และทดสอบฮาร์ดแวร์ |
 | `/docs` | ฐานความรู้ (Knowledge Base) รูปแบบ OKF ที่บริหารจัดการโดย AI Agent |
 
-## 🚀 เริ่มต้นใช้งาน (Quick Start)
-ดูวิธีการติดตั้ง การเตรียม Raspberry Pi และการตั้งค่าระบบได้ที่ [SETUP.md](SETUP.md)
+## 🚀 เริ่มต้นใช้งานด่วน (Quick Start)
+
+รันคำสั่งด้านล่างใน Terminal (รองรับ Linux / Raspberry Pi OS) เพื่อติดตั้งระบบ HECS ทันที:
+```bash
+curl -sL https://raw.githubusercontent.com/nithep/Hotel-ECS/main/install.sh | bash
+```
+> หรืออ่านคู่มือการติดตั้งแบบละเอียดได้ที่ [SETUP_QUICKSTART.md](SETUP_QUICKSTART.md)
 
 ## 🛡️ ความปลอดภัย (Security & Safety)
 ทุกคำสั่งควบคุมตู้สาขาและระบบไฟ จะต้องผ่านระบบ `StateVerifier` เสมอ เพื่อป้องกันอันตรายระดับฮาร์ดแวร์ ดูเพิ่มเติมที่ [SECURITY.md](SECURITY.md)
