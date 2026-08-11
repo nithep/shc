@@ -67,6 +67,7 @@ Resolve from Hotel-ECS repo root (or absolute `…/Hotel-ECS/`):
 | Backend | `http://localhost:8000` (`BACKEND_API_URL`) |
 | Edge Pi (ops docs) | `192.168.1.94` (LAN primary) / `192.168.1.109` (WiFi OOB backup) — alias `ssh pi4`; WiFi kept as out-of-band with power-save disabled via systemd `wifi-power-save-off.service` |
 | API auth | env `SNC_API_KEY` — **all POST/PUT/DELETE require header `X-API-Key`** (GET stays open for dashboard polling); 401 without it |
+| Rate limit | in-memory per-IP per-minute, checked **before** auth (also throttles key brute-force): GET 120/min (`SNC_RATE_LIMIT_GET`), writes 20/min (`SNC_RATE_LIMIT_WRITE`); 429 + `Retry-After: 60` when exceeded |
 | Public demos (if tunnel live) | `https://hotel.nithep.com/nursecall`, admin console per deploy docs |
 
 ## Event decision matrix (software SoT = listener + server)
