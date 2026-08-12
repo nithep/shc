@@ -35,3 +35,11 @@ playwright-report/
 # Database
 *.db
 *.sqlite
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local agent tooling
+.freebuff/
+.grok/
