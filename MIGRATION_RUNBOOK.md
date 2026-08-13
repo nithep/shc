@@ -43,7 +43,7 @@
 | `ops/scripts/agents/*.js` | `../../docs` → `../../doc` |
 | `ops/ecosystem.config.js` | `./backend/server.js` → `./api/server.js` |
 | `ops/docker-compose.yml` / `ops/docker-compose.prod.yml` | volumes/command → `api/`, `app/`, `pbx/`, `nithep/shc` |
-| `ops/edge-agent/test/e2e/flow.test.js` / `pbx/test/e2e/flow.test.js` | `../../../backend` → `../../../api` |
+| `ops/edge-agent/test/e2e/flow.test.js` / `pbx/test/e2e/flow.test.js` | require `../../simulator/pbx-simulator` — path สัมพัทธ์ถูกต้องอยู่แล้ว (ตรวจแล้ว ไม่ต้องแก้) |
 | `ops/install.sh`, `bootstrap-pi.sh`, `fix-cloudflare.sh`, `deploy-to-pi.ps1`, `check-pi-status.sh` ฯลฯ | `/opt/hotel-ecs` → `/home/ecs-agent/nithep/shc` |
 | `ops/workflows/deploy-*.yml` | `backend/` → `api/`, `frontend/` → `app/` |
 
