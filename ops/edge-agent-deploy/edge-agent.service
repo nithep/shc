@@ -1,0 +1,19 @@
+[Unit]
+Description=Hotel ECS MQTT Edge Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/edge-agent
+EnvironmentFile=/opt/edge-agent/.env
+ExecStart=/usr/bin/python3 /opt/edge-agent/mqtt_agent_pi.py
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=edge-agent
+
+[Install]
+WantedBy=multi-user.target

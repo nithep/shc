@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  # 1. Main Backend API Service (เสิร์ฟทั้ง REST API และ static web frontend ที่ port 3000)
+  hotel-app:
+    image: node:20-alpine
+    container_name: hotel-app
+    working_dir: /app
+    volumes:
+      # ดึง source code ที่คัดลอกมาวางที่ /home/ecs-agent/nithep/shc เข้าไปใน container
+      - /home/ecs-agent/nithep/shc:/app
+      # Mount ไฟล์คอนฟิกูเรชันภายนอกที่แก้ไขหน้างานโดยตรง
+      - /home/ecs-agent/nithep/shc/config/.env:/app/api/.env
+      # Mount ฐานข้อมูลคงทน (Persistent) ออกมาบน Host OS เพื่อไม่ให้หายตอนอัปเดตอิมเมจ
+      - /home/ecs-agent/nithep/shc/data/hotel.db:/app/api/hotel.db
+      # Mount โฟลเดอร์สำหรับเก็บประวัติ log กิจกรรมต่างๆ
+      - /home/ecs-agent/nithep/shc/logs:/app/api/logs
+      # Mount DBus system bus socket to talk to host NetworkManager
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+    ports:
+      - "3000:3000"
+    command: sh -c "apk add --no-cache networkmanager networkmanager-cli && cd api && npm install --omit=dev && node server.js"
+    restart: always
+
+  # 2. Cloudflare Tunnel สำหรับเชื่อมต่อกลับไปยังคลาวด์สาธารณะโดยไม่ต้องทำ Forward Port
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: hotel-tunnel
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: always
+    depends_on:
+      - hotel-app

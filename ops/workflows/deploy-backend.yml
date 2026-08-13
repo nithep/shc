@@ -1,0 +1,59 @@
+name: Deploy Backend to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: hotel-ecs-nithep
+  SERVICE_NAME: hotel-ecs-backend
+  REGION: asia-southeast1
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+        
+      - name: Build and Push Container
+        run: |
+          # Create repository if not exists (ignore error if it does)
+          gcloud artifacts repositories create cloud-run-source-deploy \
+            --repository-format=docker --location=${{ env.REGION }} || true
+            
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          
+          cd backend
+          docker build -t $IMAGE .
+          docker push $IMAGE
+          
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          flags: '--allow-unauthenticated'
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          env_vars: |
+            MQTT_BROKER_URL=${{ secrets.MQTT_BROKER_URL }}
+            MQTT_USERNAME=${{ secrets.MQTT_USERNAME }}
+            MQTT_PASSWORD=${{ secrets.MQTT_PASSWORD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            FRONTDESK_PIN=${{ secrets.FRONTDESK_PIN }}
+            OWNER_PIN=${{ secrets.OWNER_PIN }}

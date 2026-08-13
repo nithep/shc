@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # 1. Phonik PBX ECS-103R V.5 TCP Simulator (Digital Twin)
+  pbx-simulator:
+    image: node:20-alpine
+    container_name: hotel-pbx-simulator
+    working_dir: /app
+    volumes:
+      - ./pbx:/app
+    command: node simulator/pbx-simulator.js --port 10001 --delay 20
+    ports:
+      - "10001:10001"
+    restart: always
+
+  # 2. Main Backend API Service with integrated PBX Connector
+  hotel-backend:
+    image: node:20-alpine
+    container_name: hotel-backend
+    working_dir: /app
+    volumes:
+      - .:/app # แนบ Root เพื่อให้ require('../pbx') ทำงานได้สมบูรณ์
+    command: sh -c "cd api && npm install && node server.js"
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - PBX_MODE=tcp
+      - PBX_HOST=pbx-simulator
+      - PBX_PORT=10001
+      - ENFORCE_SCHEDULE=false # รันทดสอบและทำงานนอกตารางเวลาได้ (เช่น ตรวจรับระบบยามวิกาล)
+      - DATABASE_PATH=/app/api/hotel.db
+    depends_on:
+      - pbx-simulator
+    restart: always
+
+  # 3. Premium Frontend Web Dashboard & Self Check-in Portal
+  hotel-frontend:
+    image: node:20-alpine
+    container_name: hotel-frontend
+    working_dir: /app
+    volumes:
+      - ./app:/app
+    command: sh -c "npm install && npm run build && npm run preview -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - hotel-backend
+    restart: always
+
+  # 4. Cloudflare Tunnel (Secure External Access for www.nithep.com)
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: hotel-tunnel
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    restart: always
+    depends_on:
+      - hotel-backend
+

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotel ECS - QR Code ทดสอบ</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: #fff; padding: 40px; text-align: center; }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  p.sub { color: #888; margin-bottom: 32px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; }
+  .card { background: #1a1a1a; border: 1px solid #333; border-radius: 16px; padding: 24px; width: 240px; }
+  .card h2 { font-size: 18px; color: #34d399; margin: 12px 0 4px; }
+  .card img { border-radius: 8px; }
+  .card a { display: inline-block; margin-top: 12px; color: #34d399; text-decoration: none; font-size: 13px; word-break: break-all; }
+  .url-box { background: #111; border: 1px solid #333; border-radius: 8px; padding: 12px; margin: 24px auto; max-width: 600px; font-size: 13px; color: #aaa; word-break: break-all; }
+  .instructions { background: #111; border: 1px solid #333; border-radius: 12px; padding: 20px; margin: 0 auto 32px; max-width: 500px; text-align: left; }
+  .instructions li { margin-bottom: 8px; color: #ccc; }
+  .warn { color: #f59e0b; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>🏨 Hotel ECS — QR Code ทดสอบ LIFF</h1>
+<p class="sub">สแกน QR Code ด้านล่างด้วยแอป LINE เพื่อทดสอบระบบ Smart Check-in</p>
+
+<div class="instructions">
+  <p class="warn">⚠️ ก่อนสแกน ต้องทำสิ่งนี้ก่อน:</p>
+  <ol>
+    <li>ไปที่ <a href="https://developers.line.biz/console/" target="_blank" style="color:#34d399">LINE Developers Console</a></li>
+    <li>เข้า Channel <b>"Hotel ECS"</b> → แท็บ <b>LIFF</b></li>
+    <li>คลิกที่ LIFF app <b>"Smart Key"</b> → แก้ไข <b>Endpoint URL</b> เป็น:</li>
+  </ol>
+  <div class="url-box">https://poor-apes-live.loca.lt/guest</div>
+  <p style="color:#888; font-size:13px; text-align:center;">กด Save แล้วค่อยสแกน QR ด้านล่าง</p>
+</div>
+
+<div class="grid" id="qr-grid"></div>
+
+<script>
+const LIFF_ID = '2010634930-gRJCLqbu';
+const rooms = ['101','102','103','201','202','203'];
+
+const grid = document.getElementById('qr-grid');
+rooms.forEach(room => {
+  const url = `https://liff.line.me/${LIFF_ID}?room=${room}`;
+  const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;
+  
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <img src="${qrApi}" alt="QR Room ${room}" width="180" height="180" />
+    <h2>ห้อง ${room}</h2>
+    <a href="${url}" target="_blank">เปิดลิงก์ตรง ↗</a>
+  `;
+  grid.appendChild(card);
+});
+</script>
+
+</body>
+</html>

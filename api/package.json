@@ -1,0 +1,35 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "This directory will contain the API Server that acts as the bridge between the Frontend Web App and the PBX Connector.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "system:state": "node ../scripts/agent_tools/system_state.js",
+    "logs:query": "node ../scripts/agent_tools/logs_query.js",
+    "docs:verify": "node ../scripts/agent_tools/docs_verify.js",
+    "test:report": "node ../scripts/agent_tools/test_report.js",
+    "pbx:dry-run": "node ../scripts/agent_tools/pbx_dry_run.js",
+    "agent:synthesis": "node ../scripts/agents/synthesis_agent.js",
+    "agent:verify": "node ../scripts/agents/verification_agent.js",
+    "simulate": "node scripts/loop_agent.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "jsonwebtoken": "^9.0.3",
+    "mqtt": "^5.15.2",
+    "node-cron": "^4.6.0",
+    "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

@@ -1,0 +1,4 @@
+- `[x]` สร้างไฟล์ `backend/scripts/loop_agent.js` สำหรับจำลองแขกเช็คอิน/เช็คเอาท์
+- `[x]` เพิ่มคำสั่ง `npm run simulate` ใน `backend/package.json`
+- `[x]` ทดสอบรันสคริปต์ให้ผู้ใช้ดูผลลัพธ์
+- `[x]` สรุปผลงานใน `walkthrough.md`

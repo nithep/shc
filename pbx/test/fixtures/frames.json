@@ -1,0 +1,44 @@
+[
+  {
+    "description": "Check-in Room 101",
+    "command": "..PWER101=1\r\n",
+    "expectedResponse": "==PWER101=on\r\n",
+    "type": "CMD-ON",
+    "room": "101"
+  },
+  {
+    "description": "Check-out Room 101",
+    "command": "..PWER101=0\r\n",
+    "expectedResponse": "==PWER101=off\r\n",
+    "type": "CMD-OFF",
+    "room": "101"
+  },
+  {
+    "description": "Get Room 101 Status (Currently ON)",
+    "command": "..PWER=ALL\r\n",
+    "expectedResponse": "==PWER101=on\r\n==ACKW\r\n",
+    "type": "CMD-STAT",
+    "room": "101"
+  },
+  {
+    "description": "Set Guest Name Room 101",
+    "command": "..ROOM1017=John Doe\r\n",
+    "expectedResponse": "==ROOM1017=John Doe\r\n",
+    "type": "CMD-ON",
+    "room": "101"
+  },
+  {
+    "description": "Invalid Command - NACK Response",
+    "command": "..INVALID_CMD\r\n",
+    "expectedResponse": "==NACK\r\n",
+    "type": "INVALID",
+    "room": null
+  },
+  {
+    "description": "Non-existent Room Status - NACK Response",
+    "command": "..ROOM9999=\r\n",
+    "expectedResponse": "==NACK\r\n",
+    "type": "CMD-STAT",
+    "room": "9999"
+  }
+]

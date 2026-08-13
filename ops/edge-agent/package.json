@@ -1,0 +1,36 @@
+{
+  "name": "pbx-connector",
+  "version": "2.0.0",
+  "description": "Phonik PBX connector — Protocol engine, transport layer (TCP/Serial), simulator, and test harness for hotel room relay control.",
+  "main": "index.js",
+  "scripts": {
+    "simulator": "node simulator/pbx-simulator.js",
+    "simulator:chaos": "node simulator/pbx-simulator.js --delay 300 --drop-rate 0.05",
+    "simulator:nack": "node simulator/pbx-simulator.js --nack-room 103",
+    "test": "node test/harness.js",
+    "test:jest": "jest",
+    "test:jest:unit": "jest test/unit",
+    "test:jest:integration": "jest test/integration",
+    "test:jest:e2e": "jest test/e2e",
+    "test:loop": "node test/test-loop.js",
+    "test:loop:quick": "node test/test-loop.js --iterations 10"
+  },
+  "keywords": [
+    "phonik",
+    "pbx",
+    "hotel",
+    "ecs",
+    "relay"
+  ],
+  "author": "Hotel ECS Integration Team",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "mqtt": "^5.15.2",
+    "serialport": "^13.0.0"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
+  }
+}
