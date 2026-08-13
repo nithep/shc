@@ -1366,3 +1366,27 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - **ติดตั้งบน Pi แล้ว:** cron `7 * * * *` (ทุกชั่วโมง นาทีที่ 7 หลีกเลี่ยงชนกับงานอื่น) + ทดสอบรันจริงรอบแรก: reminder block=0 ถูกบันทึกลง `burnin_reminder.log` ครบพร้อมคำเตือน
 - **โหมดคำสั่ง:** `--check` (ดูสถานะ), `--simulate` (จำลองไม่เขียนอะไร), `--install` (ลง cron), `--help`
 
+
+## [2026-08-13] แยกโครงสร้าง 5-Core และจัดแบ่ง Repos ภายใต้แบรนด์ nithep (SHC/SNC Restructure)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Codebuff Agent)
+
+**รายละเอียดการอัปเดต:**
+- **จัดโครงสร้าง SHC เป็น 5-Core มาตรฐาน (`nithep/shc`) บน branch `split/shc`:**
+  - `frontend/` → `app/` (React/Vite Dashboard + Self Check-in UI) + `frontend-liff/` → `app/liff/` (LINE MINI App)
+  - `backend/` → `api/` + `backend-cloudrun/` → `api/cloudrun/` (GCP Cloud Run Gateway)
+  - `pbx-connector/` → `pbx/` (Protocol Driver + Simulator + Test Suite)
+  - `scripts/`, `edge-agent/`, `worker/`, `vpn-setup/`, `ai-models/`, docker-compose, deploy scripts → `ops/`
+  - `docs/` (OKF Vault) → `doc/` — **ครบ 124/124 ไฟล์** (ตรวจสอบด้วย git tree diff)
+  - ลบ `snc-poc/` ทั้งหมดออกจาก SHC branch (แยกไป `nithep/snc`)
+  - อัปเดต path: `require('../pbx-connector')` → `'../pbx'`, `/opt/hotel-ecs` → `/home/ecs-agent/nithep/shc`, workflows → `api/`/`app/`
+  - Verify: node --check ผ่านทุกไฟล์, bash -n ผ่านทุกสคริปต์
+- **จัดโครงสร้าง SNC เป็น 5-Core มาตรฐาน (`nithep/snc`) บน branch `split/snc`:**
+  - `snc-poc/backend/` → `api/` (FastAPI + services/), `public/index.html` → `app/`, `pbx-connector/` → `pbx/`
+  - deploy/burn-in/backup tooling → `ops/`, เอกสาร → `doc/` (+ `doc/wiki/`)
+  - ลบโมดูล SHC ทั้งหมดออกจาก SNC branch (frontend, backend, worker, docs ฯลฯ)
+  - อัปเดต path: `/home/ecs-agent/snc-poc` → `/home/ecs-agent/nithep/snc`, systemd WorkingDirectory → `api/`/`pbx/`, `server.py` static_dir → `../app`
+  - แก้ syntax error เดิมใน `monitor-snc-status.sh` (python3 -c quoting)
+  - Verify: py_compile ผ่านทุกไฟล์, bash -n ผ่าน, **test_smdr_parser 26 tests PASSED**
+- **เขียน `MIGRATION_RUNBOOK.md` ทั้ง 2 branch:** mapping path เดิม→ใหม่, ขั้นตอน deploy หลัง Burn-in (15 ส.ค. 03:03), rollback, และคำสั่ง `git filter-repo` สำหรับแยก repo ในอนาคต
+- **ข้อจำกัดสำคัญ:** ไม่แตะ Pi 4 จนกว่า Burn-in 48 ชม. ผ่าน (15 ส.ค. 2569 03:03) ตามแผน — deploy จริงต้องรอ
