@@ -1390,3 +1390,20 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
   - Verify: py_compile ผ่านทุกไฟล์, bash -n ผ่าน, **test_smdr_parser 26 tests PASSED**
 - **เขียน `MIGRATION_RUNBOOK.md` ทั้ง 2 branch:** mapping path เดิม→ใหม่, ขั้นตอน deploy หลัง Burn-in (15 ส.ค. 03:03), rollback, และคำสั่ง `git filter-repo` สำหรับแยก repo ในอนาคต
 - **ข้อจำกัดสำคัญ:** ไม่แตะ Pi 4 จนกว่า Burn-in 48 ชม. ผ่าน (15 ส.ค. 2569 03:03) ตามแผน — deploy จริงต้องรอ
+
+## [2026-08-14] การตรวจสอบระบบการย้ายโครงสร้างและติดตั้ง Self-Healing Logger (SHC Verification & Self-Healing Fixes)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Antigravity Agent)
+
+**รายละเอียดการอัปเดต:**
+- **อัปเดตการอ้างอิง Root & Package scripts:**
+  - ปรับปรุงโครงสร้างไฟล์ `package.json` ของรูทโปรเจกต์ให้สอดคล้องกับสถาปัตยกรรม 5-Core โดยแมปคำสั่ง `"install:all"`, `"dev:simulator"`, `"dev:backend"`, และ `"dev:frontend"` ให้ลิงก์ไปยังโฟลเดอร์ใหม่ (`api`, `app`, `pbx` แทน `backend`, `frontend`, `pbx-connector`) ป้องกันข้อผิดพลาดในการรันคำสั่งพัฒนาและติดตั้งแพ็กเกจ
+  - อัปเดตสคริปต์ใน `api/package.json` ให้เปลี่ยนการเรียกชุดคำสั่งในระบบวินิจฉัยและสกัดสาระสำคัญจาก `../scripts/` ไปสู่ `../ops/scripts/` ให้สอดคล้องกับพาทใหม่ใน branch `split/shc`
+- **แก้ไขปัญหาระบบเขียน Log ด้วยกลไก Self-Healing:**
+  - แก้ไขและปรับปรุงตัวดักจับบันทึกข้อผิดพลาดใน `pbx/logger.js` จากพาทเดิมที่พยายามเขียนลงสู่โฟลเดอร์ `backend/structured.log` ให้ชี้เป้าหมายไปที่โฟลเดอร์ใหม่ `api/structured.log`
+  - ยกระดับความมั่นคงในการทำงานด้วยการติดตั้งกลไก **Self-Healing Log Directory creation** ในโมดูลบันทึกข้อมูล โดยตรวจสอบว่าโฟลเดอร์ปลายทางมีอยู่จริงหรือไม่ หากไม่พบระบบจะใช้คำสั่ง `fs.mkdirSync(..., { recursive: true })` เพื่อสร้างโฟลเดอร์เป้าหมายให้โดยอัตโนมัติก่อนเขียนไฟล์ ป้องกันปัญหาข้อผิดพลาด `ENOENT: no such file or directory` ทุกกรณี
+- **ผลการทำระบบทดสอบแบบครบวงจร (End-to-End Master Process Verification):**
+  - ดำเนินการรันทดสอบชุดโปรแกรมควบคุมแบบครบวงจร `api/master_process_test.js` ภายใต้สภาพแวดล้อมจำลอง Digital Twin ร่วมกับโปรแกรมจำลองตู้สาขา (PBX Simulator)
+  - ผลลัพธ์: ระบบสามารถเริ่มระบบฐานข้อมูล SQLite (Room State Init), สั่งเปิดระบบไฟ (PBX Relay ON), ปรับปรุงฐานข้อมูลห้องพัก, ตรวจสอบความถูกต้องของสถานะ (State Verification), จำลองการแจ้งเตือน, และสั่งยกเลิกไฟ (Check-out / Power Total Cut) ได้อย่างสมบูรณ์แบบโดย**ไม่มีข้อผิดพลาดด้านการบันทึก Log หลงเหลืออยู่ (100% SUCCESS STATUS, 0 ERRORS)**
+- **ข้อเน้นย้ำ:** ยึดมั่นตามมาตรการ "แช่แข็ง Pi 4" ระหว่างการทำ Burn-in 48 ชม. ของระบบอย่างเคร่งครัด (กำหนดสิ้นสุด 15 ส.ค. 2569 เวลา 03:03) การย้ายพาทและติดตั้งจริงบนฮาร์ดแวร์ Pi 4 จะเริ่มดำเนินการทันทีหลังจากพ้นระยะเวลาดังกล่าวและรายงาน Burn-in สำเร็จ
+

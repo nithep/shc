@@ -43,6 +43,10 @@ class StructuredLogger {
 
     if (this.logFile) {
       try {
+        const dir = path.dirname(this.logFile);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
         fs.appendFileSync(this.logFile, formatted + '\n', 'utf8');
       } catch (err) {
         // Fallback if writing fails
@@ -75,7 +79,7 @@ class StructuredLogger {
 // Global logger instance
 const logger = new StructuredLogger({
   serviceName: 'pbx-connector',
-  logFile: path.join(__dirname, '..', 'backend', 'structured.log'),
+  logFile: process.env.STRUCTURED_LOG_PATH || path.join(__dirname, '..', 'api', 'structured.log'),
   logLevel: process.env.LOG_LEVEL || 'info',
 });
 
