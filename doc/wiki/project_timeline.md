@@ -1575,3 +1575,17 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - **จุดสำคัญที่ยังต้องยืนยัน (Pending Verification List):**
   - หมายเลขห้องจริงบนผังอาคาร (เนื่องจากรูป F11.jpg ความละเอียดต่ำ), จำนวนเตียงต่อห้องสำหรับคำนวณจำนวน Call Cord, ตำแหน่งติดตั้ง KEY station ทั้ง 2 จุด, และการตรวจรับเทียบจำนวนกับใบเสนอราคา 3629
 
+## [2026-08-23] ซ่อมสายการผลิต Deploy ครบวงจร + Deploy MQTT/SSE Bridge ขึ้น Cloud Run สำเร็จ (CI/CD Pipeline Repair & First Live Deploy)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (opencode Agent)
+
+**รายละเอียดการอัปเดต:**
+- **เก็บกวาด Repository:** ลบไฟล์ duplicate `(1)` ที่ซ้ำเนื้อหา 1 ไฟล์ (`ops/deploy-edge (1).ps1`) และย้ายไฟล์ที่เนื้อหาต่างจากต้นฉบับ 17 ไฟล์ไปเก็บรวมที่ `D:\shc_quarantine\2026-08-23\` + ลบ git ref เสีย `.git/refs/heads/split/shc (1)` ที่ทำให้ `git fetch` ล้มเหลว
+- **ยืนยันไม่มี conflict** กับ origin/main (a1bef21) แล้ว Commit+Push ชุดงาน MQTT/SSE Bridge (`sse_broker.js`, `state_store.js`, Dockerfile, mosquitto TLS setup) — secrets (`pwfile`, `server.key`) ถูก .gitignore ป้องกันไว้เรียบร้อย + OKF World Model Verification ผ่าน 100%
+- **แก้บั๊ก Env Vars ชื่อไม่ตรงกัน** ใน deploy-backend.yml: workflow ส่ง `MQTT_BROKER_URL/MQTT_USERNAME/MQTT_PASSWORD` แต่โค้ดอ่าน `MQTT_BROKER/MQTT_USER/MQTT_PASS` → แก้ฝั่ง workflow ให้ตรงกับโค้ด (commit 1192d5f)
+- **ค้นพบสาเหตุรากฐานที่ทำให้ CI ตายเงียบ:** ไฟล์ workflow ถูกเก็บที่ `ops/workflows/` หลังโครงสร้าง 5-core ย้าย repo — GitHub Actions อ่านเฉพาะ `.github/workflows/` เท่านั้น จึงไม่มีรันเกิดขึ้นเลยตั้งแต่ split repo → ย้ายกลับตำแหน่งที่ถูกต้อง (commit 4dd0cfa)
+- **ติดตั้ง Google Cloud SDK v581.0.0** บนเครื่อง dev + ล็อกอิน `admin@nithep.com` + ผูกโปรเจกต์ `hotel-ecs-nithep` → ใช้ตรวจ Cloud Run โดยตรงได้ (พบ service `hotel-ecs-backend` active แต่เป็น revision เก่า 13 ส.ค.)
+- **วินิจฉัย Deploy ล้ม 8 วินาที:** Repo ใหม่ (split) ไม่มี Secret `GCP_SA_KEY` ติดตั้ง (secrets ไม่เดินทางตาม repo) → ออก key ใหม่ให้ SA `github-deployer@hotel-ecs-nithep.iam.gserviceaccount.com` และใส่ลง GitHub Secrets สำเร็จ (key ไฟล์ local ถูกลบทิ้งหลังใช้งาน)
+- **Deploy สำเร็จเต็มวงจรครั้งแรกหลัง split repo:** Revision `hotel-ecs-backend-00015-lxs` Active — `/health` ตอบ HTTP 200: `{"status":"ok","mqttConnected":true,"pendingSessions":0}` (uptime 166s) ยืนยัน MQTT Broker เชื่อมต่อสำเร็จจาก Cloud
+- **ข้อพึงระวังต่อ (Pending):** Backend ยังเชื่อม Public HiveMQ (fallback) จนกว่าจะเพิ่ม Secrets `MQTT_BROKER_URL/MQTT_USERNAME/MQTT_PASSWORD` ให้ตรง broker จริง (mosquitto TLS หน้างาน), Frontend workflow อาจต้องเพิ่มสิทธิ์ Firebase ให้ SA, และควรพิจารณา Workload Identity Federation แทน long-lived key ในอนาคต
+
