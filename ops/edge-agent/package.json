@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "simulator": "node simulator/pbx-simulator.js",
+    "mqtt": "node mqtt_agent.js",
     "simulator:chaos": "node simulator/pbx-simulator.js --delay 300 --drop-rate 0.05",
     "simulator:nack": "node simulator/pbx-simulator.js --nack-room 103",
     "test": "node test/harness.js",

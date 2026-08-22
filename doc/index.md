@@ -50,9 +50,9 @@ updated: "2026-08-02T01:05:39+07:00"
 - [[wiki/setup_quickstart|คู่มือการติดตั้งและเริ่มต้นใช้งานด่วน (HECS Quick Start Guide)]]
 - [[wiki/system_cost_and_maintenance|💰 ทะเบียนค่าใช้จ่ายและการบำรุงรักษาระบบ (System Cost & Maintenance Ledger)]]
 
-## 🚑 ระบบ Smart Nurse Call & Predictive Analytics (Healthcare IoT)
+## 🚑 ระบบ Smart Nurse Call (Healthcare IoT - Standalone Sibling Repo)
 
-- [[wiki/smart_nurse_call_project_plan|📋 บันทึกโครงการ Smart Nurse Call & Predictive Analytics Architecture]]
+* *ระบบ Smart Nurse Call (SNC) ได้รับการโอนย้ายสถาปัตยกรรมและซอร์สโค้ดแยกเป็นคลังอิสระอย่างเป็นทางการที่ Repository: `nithep/snc`*
 
 ## 💎 ดีไซน์ UI/UX, LINE LIFF & Mobile App (Frontend & Social Integration)
 

@@ -88,7 +88,7 @@ function startServices() {
 
     // 1. เริ่มต้นรัน PBX Simulator
     log('-> กำลังเปิดบริการตู้สาขาจำลอง Phonik PBX Simulator (TCP พอร์ต 10001)...');
-    pbxProcess = spawn('node', ['pbx-connector/simulator/pbx-simulator.js', '--port', '10001', '--delay', '10', '--nack-room', '103'], {
+    pbxProcess = spawn('node', ['pbx/simulator/pbx-simulator.js', '--port', '10001', '--delay', '10', '--nack-room', '103'], {
       cwd: rootDir
     });
 
@@ -103,7 +103,7 @@ function startServices() {
 
     // 2. เริ่มต้นรัน Backend Server
     log('-> กำลังเปิดบริการ Backend Web API Server (HTTP พอร์ต 3000)...');
-    backendProcess = spawn('node', ['backend/server.js'], {
+    backendProcess = spawn('node', ['api/server.js'], {
       cwd: rootDir,
       env: {
         ...process.env,
@@ -112,7 +112,7 @@ function startServices() {
         PBX_HOST: '127.0.0.1',
         PBX_PORT: '10001',
         ENFORCE_SCHEDULE: 'false', // ปิดการบังคับเวลาสำหรับทดสอบ
-        DATABASE_PATH: path.join(rootDir, 'backend', 'hotel.db')
+        DATABASE_PATH: path.join(rootDir, 'api', 'hotel.db')
       }
     });
 
@@ -139,7 +139,7 @@ function startServices() {
 }
 
 function generateReport(apiSuccess, pythonSuccess) {
-  const reportPath = path.join(rootDir, 'docs', 'wiki', 'simulation_report.md');
+  const reportPath = path.join(rootDir, 'doc', 'wiki', 'simulation_report.md');
   const timestamp = new Date().toISOString();
 
   const content = `# 📊 รายงานผลการจำลองการติดตั้งและการทดสอบระบบ (Simulation Report)
@@ -183,7 +183,7 @@ ${testLog.join('\n')}
 `;
 
   fs.writeFileSync(reportPath, content, 'utf8');
-  log(`✍️ บันทึกสรุปรายงานผลการจำลองลงในแฟ้มข้อมูลสำเร็จ: docs/wiki/simulation_report.md`);
+  log(`✍️ บันทึกสรุปรายงานผลการจำลองลงในแฟ้มข้อมูลสำเร็จ: doc/wiki/simulation_report.md`);
 }
 
 async function main() {

@@ -765,7 +765,7 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
   1. **Direct Wired Hardware Infrastructure**: กำหนดมาตรฐานเชื่อมต่อระหว่างบอร์ด Raspberry Pi Zero 2 W กับตู้ Phonik PBX (`192.168.1.91:23`) ผ่านสาย Micro-USB to LAN Adapter (ชิปเซ็ต AX88772/RTL8152) ให้ Latency < 1ms นิ่งและเสถียร 100% ขจัดสัญญาณรบกวน Wi-Fi
   2. **Zero Corporate IT Dependency**: สื่อสารข้อมูลผ่านเครือข่ายส่วนตัวด้วย **IoT 4G/5G SIM Modem** และส่งผ่าน **Cloudflare Tunnel Outbound** โดยไม่ต้องเกาะ LAN/Wi-Fi ขององค์กร ไม่ต้องเปิดพอร์ตขาเข้า (Inbound Ports = 0)
   3. **Edge AI & Data Sovereignty**: ให้การประมวลผล ตัดสินใจ และบันทึกข้อมูลสุขภาพ/ความปลอดภัย (HL7 FHIR JSON) เกิดขึ้นภายในเครื่อง On-Premise Edge Agent (Pi Zero 2W / Pi 4) โดยตรง
-  4. **Documentation**: จัดทำพิมพ์เขียว [[sovereign_ai_network_blueprint|snc-poc/docs/sovereign_ai_network_blueprint.md]] สมบูรณ์แบบเรียบร้อย
+  4. **Documentation**: จัดทำพิมพ์เขียว `snc-poc/docs/sovereign_ai_network_blueprint.md` (ย้ายไปอยู่คลังเก็บระบบ SNC) สมบูรณ์แบบเรียบร้อย
 - **สถานะ**: สำเร็จเรียบร้อย (Ready for MVP Deployment & Execution)
 
 ## [2026-08-04] Smart Nurse Call (SNC) MVP Validation & Demonstration Readiness Verified
@@ -1406,4 +1406,172 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
   - ดำเนินการรันทดสอบชุดโปรแกรมควบคุมแบบครบวงจร `api/master_process_test.js` ภายใต้สภาพแวดล้อมจำลอง Digital Twin ร่วมกับโปรแกรมจำลองตู้สาขา (PBX Simulator)
   - ผลลัพธ์: ระบบสามารถเริ่มระบบฐานข้อมูล SQLite (Room State Init), สั่งเปิดระบบไฟ (PBX Relay ON), ปรับปรุงฐานข้อมูลห้องพัก, ตรวจสอบความถูกต้องของสถานะ (State Verification), จำลองการแจ้งเตือน, และสั่งยกเลิกไฟ (Check-out / Power Total Cut) ได้อย่างสมบูรณ์แบบโดย**ไม่มีข้อผิดพลาดด้านการบันทึก Log หลงเหลืออยู่ (100% SUCCESS STATUS, 0 ERRORS)**
 - **ข้อเน้นย้ำ:** ยึดมั่นตามมาตรการ "แช่แข็ง Pi 4" ระหว่างการทำ Burn-in 48 ชม. ของระบบอย่างเคร่งครัด (กำหนดสิ้นสุด 15 ส.ค. 2569 เวลา 03:03) การย้ายพาทและติดตั้งจริงบนฮาร์ดแวร์ Pi 4 จะเริ่มดำเนินการทันทีหลังจากพ้นระยะเวลาดังกล่าวและรายงาน Burn-in สำเร็จ
+
+## [2026-08-14] การเปลี่ยนผ่านสู่ Standalone Repository และการจัดโครงสร้าง Workspace "shc" สำเร็จสมบูรณ์ (SHC Standalone Migration & Workspace Renaming Complete)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Antigravity Agent) + เจ้าของระบบ (Nithep)
+
+**รายละเอียดการอัปเดต:**
+- **เปลี่ยนผ่านสู่ Standalone Repository สำเร็จ:**
+  - สลับ remote ของโปรเจกต์ `shc` ไปยัง `https://github.com/nithep/shc.git` อย่างเป็นทางการ
+  - ดึงข้อมูลจากต้นทางสำเร็จด้วยคำสั่ง `git fetch origin`
+  - ทำการ checkout และผูก upstream ไปที่ branch `main = origin/main` (commit `a1bef21`) ด้วยวิธี `git checkout -B main origin/main` เพื่อข้ามประวัติเก่าของ monorepo ป้องกันปัญหาไฟล์จากระบบเก่าปะปน
+  - ยืนยันไฟล์สำคัญเฉพาะเครื่อง เช่น `.env`, `.obsidian`, `.agents`, และ `.freebuff` ยังอยู่ครบถ้วน ปลอดภัย
+- **ติดตั้งระบบ SNC แบบ Standalone:**
+  - ทำการ clone ระบบ `snc` ไปยังโฟลเดอร์แยกต่างหาก (`/snc`) ตามสถาปัตยกรรมคลังเก็บโค้ดคู่ขนานของแบรนด์ nithep โดยตั้งค่าให้ตรงกับ branch `main` บน origin
+- **การเปลี่ยนชื่อโฟลเดอร์และซิงก์ Google Drive:**
+  - ทำการเปลี่ยนชื่อโฟลเดอร์จาก "hotel ecs - shc" ไปเป็น "shc" บนระบบ Google Drive
+  - ยืนยันสถานะการซิงก์สำเร็จ (Verified Live via Command Line) โดยการเข้าสู่โฟลเดอร์ `/shc` และตรวจสอบสถานะ:
+    - `git status -sb` ยืนยันสถานะ `## main...origin/main` (Sync ตรงกับต้นน้ำ 100%)
+    - `git remote -v` ยืนยันชี้ไปที่ `https://github.com/nithep/shc.git`
+- **สถานะ:** การจัดเตรียมสภาพแวดล้อมฝั่งผู้พัฒนาเสร็จสมบูรณ์ 100% — พร้อมรับมือการดำเนินการพัฒนาหรือเริ่มขั้นตอนอื่นในสเต็ปถัดไป
+
+## [2026-08-14] การบูรณาการโครงสร้าง 5-Core สู่มาตรฐานสถาปัตยกรรมสารสนเทศสะอาดแบบสมบูรณ์ (SHC 5-Core Information Architecture & Vault Graph Refactoring)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Antigravity Agent) + เจ้าของระบบ (Nithep)
+
+**รายละเอียดการอัปเดต:**
+- **ปรับปรุงสคริปต์ตรวจสอบ 5-Core:**
+  * ย้ายระบบและแก้ไขพาทแบบ Hardcoded ในสคริปต์ `docs_manifest_generator.js`, `docs_verify.js`, และ `vault_graph_validator.js` ให้ชี้เป้าหมายการประมวลผลและการจัดโครงสร้างใหม่จาก `/docs` ไปยังโฟลเดอร์ `/doc` (Knowledge Base Core) ย้อนขึ้นไป 3 ระดับได้อย่างแม่นยำและเสถียร 100%
+- **ขจัดลิงก์ขาดค้างคลังสารสนเทศ (Zero Broken Links):**
+  * ดำเนินการปรับปรุงลิงก์ใน `smart_checkin_qr_setup.md` จาก `smart_hotel_comparison` เป็น `smart-hotel-comparison` ตามชื่อจริงของไฟล์ที่จัดเก็บด้วยเครื่องหมายขีดคั่นกลาง (Dash)
+  * ปรับพอร์ตและถอนลิงก์ขาดค้าง 2 จุดที่เชื่อมไปหารายละเอียดระบบ Smart Nurse Call (`smart_nurse_call_project_plan` และ `sovereign_ai_network_blueprint`) ในไฟล์ `doc/index.md` และ `doc/wiki/project_timeline.md` เนื่องจากไฟล์ดิบดังกล่าวได้โอนย้ายความรับผิดชอบไปอยู่ยังคลังคู่ขนาน `nithep/snc` อย่างเป็นระบบแล้ว ป้องกันการเกิดข้อผิดพลาดและความไม่สอดคล้องของกราฟความรู้อนาคต
+  * ผลลัพธ์: การรันตรวจสอบ `vault_graph_validator.js` คืนค่าสำเร็จระดับยอดเยี่ยม **"100% Link Integrity Verified! Zero Broken Links found."**
+- **จัดเก็บเอกสาร Inbox ตามมาตรฐาน OKF (Distillation Process):**
+  * ย้ายไฟล์ดิบชั่วคราว `doc/raw/freebuff-preview status.md` เข้าสู่แฟ้มประวัติถาวร `/doc/raw/archive/freebuff-preview status.md` ได้อย่างหมดจด ปล่อยให้โฟลเดอร์ Root ของข้อมูลดิบเป็นไปตามระเบียบวินัยความสะอาดของ OKF
+  * ทำการสร้างไฟล์ดัชนีระบุความถูกต้องของข้อมูลใหม่ (`MANIFEST.sha256`) ส่งผลให้รายงานการจับคู่ระดับความแท้จริงผ่านฉลุยแบบ **"World Model Verification successful"**
+- **อัปเกรดระบบหน่วยความจำ AI (Agent Memory Alignment):**
+  * เขียนทับข้อกำหนดในไฟล์ `AGENTS.md` และ `.agents/AGENTS.md` (System Rule Sets) ทั้งหมด เพื่อระบุขอบเขตระบบย่อยภายใต้โครงสร้าง 5-Core ใหม่ ตัดเสียงรบกวนทางความเข้าใจจากรอยต่อโปรเจกต์เดิมและระบบ SNC ทำให้ระบบปัญญาประดิษฐ์โฟกัสโค้ดและความต้องการฝั่ง SHC ได้คมชัด ปราศจากเสียงรบกวน (Noise) ยอดเยี่ยม 100%
+- **สถานะ:** คลังความรู้ สคริปต์สแกนอัตโนมัติ และแกนระบบสารสนเทศทั้งหมดสะอาด นิ่ง และพร้อมใช้งานในการสเกลระบบ IoT และ LINE Platform ต่อไป
+
+## [2026-08-14] การกู้คืน Backend API ฉบับเต็มที่ถูกเขียนทับระหว่างการแยกโครงสร้าง (SHC API Server Restoration & E2E Test Suite Fix)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Codebuff Agent)
+
+**รายละเอียดการอัปเดต:**
+- **ค้นพบต้นตอวิกฤตจากการ Migration:** ตรวจพบว่าไฟล์ `api/server.js` ที่ย้ายมาในโครงสร้าง 5-Core ยังคงเป็นเวอร์ชัน Stub ขนาด 62 บรรทัด (เหลือเพียง `/api/rooms`, `/api/health`, `/api/events/trigger`) แทนที่จะเป็น API Server ฉบับสมบูรณ์ 2,143 บรรทัด ซึ่งถูกเขียนทับโดย commit `d50dbea` (งาน SNC) ระหว่างช่วงที่อยู่บน monorepo เดียวกัน ส่งผลให้ Endpoint หลักทั้งหมดหายไป:
+  - `/api/checkin`, `/api/checkout` (พร้อม JWT Token, PDPA Consent, Approval Gate, Audit Log, Rate Limiter)
+  - `/api/admin/*` (Booking Management, Approvals, API Keys), `/api/pdpa/*`, `/api/wifi/*`, `/api/rooms/control`, `/api/v1/external/*`, `/api/diagnostics/*`, `/api/docs` ฯลฯ
+  - ส่งผลให้ชุดทดสอบ E2E (`pbx/test/e2e/flow.test.js`, `ops/edge-agent/test/e2e/flow.test.js`) ล้มเหลว 2/2 case และ Frontend หน้า Scan ไม่สามารถเช็คอินได้จริง
+- **กู้คืนและปรับให้เข้ากับ 5-Core อย่างสมบูรณ์:**
+  * กู้คืน `api/server.js` ฉบับเต็มจาก commit `9cbba2c` (เวอร์ชันสมบูรณ์สุดท้ายก่อนถูกเขียนทับ) และปรับ path ให้สอดคล้องกับโครงสร้างใหม่: `require('../pbx')` (PBX Driver Core แทน MQTT facade ชั่วคราว), `../doc` (แทน `../docs`), `../app/dist` (แทน `../frontend/dist`), `/home/ecs-agent/nithep/shc/data|config` (แทน `/opt/hotel-ecs`)
+  * ยืนยันว่า `api/db.js` และ services ทั้ง 12 ตัว (`approval_gate`, `audit_log`, `rate_limiter`, `telegram_bot`, `google_notifier`, `wifi_service`, `apiKeyService`, `pdpa_service`, `cron_scheduler`, `mqtt_connector`, `diagnostics`, `email_notifier`) ตรงกับเวอร์ชันที่ Server ฉบับเต็มใช้งานทุกประการ
+- **ซ่อมแซมพาท E2E Tests และสคริปต์ปฏิบัติการ (Path Alignment Fixes):**
+  * `pbx/test/e2e/flow.test.js` และ `ops/edge-agent/test/e2e/flow.test.js`: ปรับ `serverPath` ไปยัง `api/server.js` ให้ถูกต้องตามระดับความลึกของแต่ละโฟลเดอร์ (3 ระดับ สำหรับ pbx, 4 ระดับ สำหรับ ops/edge-agent)
+  * `ops/scripts/start-sim-server.js` และ `ops/scripts/run-appliance-sim.js`: อัปเดต `pbx-connector/...` → `pbx/...`, `backend/...` → `api/...`, `docs/` → `doc/`
+  * `ops/scripts/agent_tools/test_report.js`: แก้ `PBX_CONNECTOR_DIR` จาก `../../pbx-connector` → `../../../pbx`
+  * `ops/deploy-to-pi.ps1`: อัปเดต `$FoldersToCopy` เป็น `api`, `app`, `pbx`, `doc`, `ops` และแก้ `$ProjectRoot` ให้ชี้ระดับ root ของ 5-Core ถูกต้อง
+  * `ops/scripts/agents/synthesis_agent.js` / `verification_agent.js` / `Launcher.ps1`: แก้ path `docs/` → `doc/` ให้สอดคล้องกัน
+- **ผลการทดสอบครบวงจร (Verification Results):**
+  * `pbx` Jest Suite: **28/28 tests ผ่าน (100%)** — unit, integration, fixtures, E2E ครบ 5 suites
+  * `ops/edge-agent` Jest Suite: **28/28 tests ผ่าน (100%)** — E2E Full Flow (API → PBX Simulator) ผ่านทั้ง Check-in/Check-out
+  * `api/master_process_test.js`: ครบ 6 ขั้นตอน (DB Init → Relay ON → State Verify → Notification → Relay OFF → Final Verify) **ผล 100% SUCCESS, 0 ERRORS**
+  * `node --check` ผ่านทุกไฟล์ที่แก้ไข — ไม่มี Syntax Error หลงเหลือ
+- **ข้อเน้นย้ำ:** การกู้คืนครั้งนี้สำคัญต่อการ Deploy จริงบน Pi 4 หลัง Burn-in 48 ชม. (ครบ 15 ส.ค. 2569 03:03) — ระบบ Backend กลับมามี Business Logic ครบวงจรพร้อมใช้งาน (Check-in/Out, PDPA, RBAC, WiFi, Approvals, Google Workspace Notifications) ภายใต้โครงสร้าง 5-Core อย่างสมบูรณ์
+
+## [2026-08-14] การเชื่อมต่อ LINE Mini App (LIFF) กับ Cloud Run API จริง (LIFF Real API Integration & Smart Room Controls)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Codebuff Agent)
+
+**รายละเอียดการอัปเดต:**
+- **ยกระดับ LIFF จาก Demo สู่การเชื่อมต่อจริง (CheckIn.jsx):**
+  * เพิ่มตัวจัดการ API Request (`apiRequest`) ยิงไปยัง Cloud Run Backend ผ่าน `VITE_API_URL` (รองรับทั้ง relative path `/api` และ Cloud Run แยกโดเมน) พร้อม LIFF ID จริง `2010634930-gRJCLqbu` แทน `dummy-liff-id` เดิม
+  * เชื่อมต่อขั้นตอนชำระเงิน (Step 2) กับ `POST /api/guest/checkin` จริง: ส่ง `roomNumber`, `lineUserId`, `guestName`, `transactionId`, `paymentMethod` → Cloud Run Publish MQTT `ON` → Edge Agent → PBX
+  * แก้ปุ่ม **Lights ON / Lights OFF** (Smart Room Controls) ให้ทำงานจริงผ่าน endpoint ใหม่ `POST /api/guest/control` พร้อมแจ้งผลสำเร็จ/แสดงข้อผิดพลาด (Alert + Error Banner)
+- **เพิ่ม Cloud Run API Endpoint ควบคุมไฟเดี่ยว (`/api/guest/control`):**
+  * พัฒนาใน `api/cloudrun/index.js` รองรับ `action: 'ON'|'OFF'` — อัปเดต State Store, Publish MQTT ไป Edge Agent, validation 400 เมื่อ `roomNumber` หายหรือ `action` ไม่ถูกต้อง
+  * ทดสอบครบ: Check-in (ON) ✅ / Control ON ✅ / Control OFF ✅ / Room Status แสดง `lastCommand` + `lastControlAt` ✅ / Invalid action → 400 ✅ / Missing room → 400 ✅
+- **โครงสร้างพื้นฐาน Cloud Run (Deployment Readiness):**
+  * สร้าง `api/cloudrun/Dockerfile` (Node 20 Alpine, `npm install --omit=dev`, CMD `index.js`)
+  * แก้ `ops/workflows/deploy-backend.yml`: `cd backend` → `cd api/cloudrun` ให้ตรงกับ 5-Core
+  * สร้าง `app/liff/.env.example` ระบุ `VITE_LIFF_ID` + `VITE_API_URL` เป็นมาตรฐาน
+- **ผลการยืนยัน (Verification):** Vite Build ของ LIFF ผ่าน 100% (0 errors, 0 vulnerabilities), `node --check` ผ่าน, ทดสอบ Cloud Run API บน local (พอร์ต 8080) ครบทุกรายการ รวมถึงยืนยัน MQTT Broker เชื่อมต่อจริง (`mqttConnected: true`)
+
+## [2026-08-14] การบันทึกสเปกต้นฉบับ Phonik CCH2 และซ่อมบั๊กพาท Agent Scripts (CCH2 Ground Truth Capture & Agent Path Fix)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Codebuff Agent)
+
+**รายละเอียดการอัปเดต:**
+- **สกัดและบันทึกสเปกต้นฉบับ Phonik Protocol CCH2:**
+  * สกัดข้อความจาก PDF ต้นฉบับของผู้ผลิต (`G:\Phonik\Phonik Protocol CCH2.pdf`) ด้วย `pdftotext` — เนื้อหาครบถ้วน 127 บรรทัด
+  * บันทึกลงคลังความรู้มาตรฐาน OKF: `doc/raw/hardware_specs/phonik_protocol_cch2.md` (สถานะ Ground Truth) ครอบคลุม: Telnet connection, `VERS=` (DX-SERIES/DXE/JSD/CIX/DX-COMPACT V5), ASCII protocol (`DATE=`, `TIME=`, `STOP`), Check-In/Out (`ROOMnumb=r`, `NAMEnumb=name`), EXT. SERVICE (`WAKEnumb=hhmm`, `LOCKnumb=k`, `LANGnumb=l`)
+  * จัดทำตารางการนำไปประยุกต์ใช้: เปรียบเทียบสเปกต้นฉบับ (ROOM/NAME) กับโปรโตคอลที่ใช้จริงใน SHC (PWER สำหรับไฟ, ROOM{ext} สำหรับชื่อผ่าน Extension mapping +916, tcmd/PASS auth ที่ค้นพบจาก reverse-engineering)
+  * อัปเดต `MANIFEST.sha256` (27 ไฟล์) และผ่านการตรวจสอบ **"World Model Verification successful"** 100%
+- **ซ่อมบั๊กพาท Agent Scripts (Root Depth Fix):**
+  * แก้ `ops/scripts/agents/verification_agent.js` และ `synthesis_agent.js`: path `../../doc/...` → `../../../doc/...` เนื่องจากโฟลเดอร์ย้ายจาก `scripts/agents/` (ลึก 2) ไป `ops/scripts/agents/` (ลึก 3) หลังโครงสร้าง 5-Core — เดิมทำให้ Agent รันหาโฟลเดอร์ `ops/doc/wiki` ไม่เจอ (error: Wiki directory does not exist)
+  * หลังแก้: ทั้งสอง Agent รันสำเร็จตามปกติ (0 files — สถานะ vault สะอาด ไม่มี draft ค้าง)
+- **การยืนยันเครือข่ายหน้างาน:** ตรวจสอบภาพหน้าจอที่ผู้ใช้ส่ง พบ WireGuard tunnel `hotel-admin` (10.0.0.3/24 → 192.168.1.94:51820) และ Cloudflare One Client เชื่อมต่อปกติ — สะพานเชื่อมต่อ Pi 4 พร้อมใช้งาน
+
+## [2026-08-14] การพัฒนาสะพานเชื่อมต่อ Cloud-to-Edge แบบเรียลไทม์ (MQTT & SSE Real-time Bridge)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Codebuff Agent)
+
+**รายละเอียดการอัปเดต:**
+- **สถาปัตยกรรม Asynchronous State Flow (Cloud API):**
+  * สร้าง `api/cloudrun/state_store.js` — State Machine `PENDING_RELAY → SUCCESS/FAILED/TIMEOUT` พร้อม EventEmitter notify และ optional JSON file persistence (`STATE_FILE`)
+  * สร้าง `api/cloudrun/sse_broker.js` — จัดการ SSE client แยกตามหมายเลขห้อง (roomNo)
+  * Rewrite `api/cloudrun/index.js`: สร้าง `session_id` ทุกคำสั่ง checkin/checkout/control, publish MQTT QoS 1 พร้อม session_id, subscribe ทั้ง topic `/state` และ `/result`, เพิ่ม endpoint `GET /api/guest/stream` (SSE) + `GET /api/guest/session/:id` (polling fallback), และระบบ Sweeper ทำ TIMEOUT session ที่ค้างเกิน 30 วินาที
+- **ฝั่ง Edge Self-Healing & Verification:**
+  * ปรับ `ops/edge-agent/mqtt_agent.js`: ใช้ `clean:false` + Client ID คงที่ (อิง hostname) + QoS 1 เพื่อ Persistent Session เก็บคำสั่งค้างตอนเน็ตหลุด (Offline Resilience)
+  * เพิ่ม Read-back Verification (`..PWER=ALL`) หลังสั่งเปิด/ปิด พร้อม retry 1 ครั้งเมื่อ state mismatch ก่อน publish กลับ
+  * Publish ไปทั้ง topic `/state` (สเปคใหม่) และ `/result` (backward-compat) พร้อม `session_id` + `verified`
+  * เพิ่ม handler `..PWER=ALL` ใน MockTransport (ทั้ง `pbx/` และ `ops/edge-agent/`) ให้ Digital Twin รองรับการ verify
+- **ฝั่ง Frontend Premium (LINE LIFF):**
+  * ปรับ `app/liff/src/CheckIn.jsx`: เปิด SSE stream แบบเรียลไทม์ + polling fallback, แอนิเมชัน "ไฟสว่างวาบ" (power-flash overlay), Haptic feedback (`navigator.vibrate`), และ overlay "กำลังเตรียมความพร้อมของห้องพัก..."
+  * เพิ่ม CSS `.power-flash` และ `.preparing-overlay` ใน `app/liff/src/index.css`
+- **เอกสาร:** สร้าง `doc/wiki/mqtt_sse_cloud_edge_bridge.md` สรุปสถาปัตยกรรม Cloud-to-Edge Bridge (Topic Contract, Resilience, วิธีทดสอบ)
+
+## [2026-08-14] การติดตั้ง Mosquitto Auth + TLS สำหรับ MQTT Broker (Mosquitto Auth & TLS Setup)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Codebuff Agent)
+
+**รายละเอียดการอัปเดต:**
+- **สำรวจสภาพแวดล้อม:** พบว่าเครื่องติดตั้ง **Mosquitto 2.1.2** (Windows service, พอร์ต 1883) อยู่แล้ว โดย config เดิมเป็น anonymous + ไม่มี TLS ส่วน HiveMQ Cloud/CE credentials ไม่พบในโปรเจกต์ และ Docker ยังไม่ติดตั้ง
+- **สร้าง `ops/mosquitto/`** — ชุดติดตั้ง broker แบบ auth + TLS:
+  * `mosquitto.conf` (production: listener 1883 + 8883, `allow_anonymous false`, `password_file`, `certfile`/`keyfile`, persistence + log)
+  * `setup-auth-tls.ps1` (สคริปต์ติดตั้งอัตโนมัติ แบบ Administrator: สำรอง config → ติดตั้ง cert → สร้าง password file → restart service)
+  * `certs/server.crt` + `server.key` (self-signed, CN=hotel.nithep.com, SAN ครอบคลุม localhost/pi4.local/LAN IP, อายุ 825 วัน)
+  * `pwfile` (Mosquitto passwd, user `hotel`) + `.gitignore` ป้องกัน secret (`pwfile`, `server.key`)
+- **เพิ่ม TLS option ในโค้ด:** `MQTT_TLS_REJECT_UNAUTHORIZED` (default `true`) ใน `mqtt_agent.js` + `api/cloudrun/index.js` เพื่อรองรับ self-signed cert ใน dev/internal
+- **อัปเดต `.env.example`:** ทั้ง Cloud + Edge ให้มีตัวอย่าง `mqtts://...:8883` + username/password + TLS flag
+- **ผลทดสอบ (end-to-end ผ่าน mqtts + auth):** check-in ON → SUCCESS (verified=true) + check-out OFF → SUCCESS และทดสอบ auth enforcement: creds ถูกต้อง → เชื่อมต่อได้, password ผิด → "Not authorized", ไม่มี creds → "Not authorized", TLS self-signed → ถูก reject (ยืนยันว่า TLS ทำงานจริง)
+
+
+## [2026-08-14] Apply Mosquitto Auth+TLS สู่ production service + แก้บั๊ก pwfile ACL (Live Apply & Fix)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Codebuff Agent)
+
+**รายละเอียดการอัปเดต:**
+- **Apply จริงกับ Windows service** ผ่าน `setup-auth-tls.ps1` (elevated/UAC) — ติดตั้ง cert + pwfile + config ใหม่เรียบร้อย พร้อมสำรอง config เดิม (`mosquitto.conf.bak.20260814-050151`)
+- **พบและแก้บั๊ก service start ไม่ขึ้น:** `mosquitto_passwd` (Windows) สร้าง `pwfile` ด้วย ACL เฉพาะเจ้าของ (mode 0600) ทำให้ service (LocalSystem) อ่านไม่ได้ → log แจ้ง `password-file: Error: Unable to open pwfile` แก้โดย `icacls` grant อ่านให้ `*S-1-5-18:(R)` (SYSTEM) + `*S-1-5-32-544:(R)` (Administrators) → service RUNNING, พอร์ต 1883 + 8883 LISTENING
+- **แก้ `setup-auth-tls.ps1` ให้รวมขั้นตอน ACL fix อัตโนมัติ** (กันติดตั้งครั้งหน้าเจอซ้ำ) + เพิ่ม troubleshooting ใน `README.md` + `.gitignore` ครอบ `apply.log`
+- **ผลทดสอบ E2E กับ broker จริง (`mqtts://127.0.0.1:8883` + auth):**
+  - Auth enforcement: password ผิด → `REJECTED: Not authorized` ✓
+  - Check-in ON → session `SUCCESS`, `verified=true` ✓ (ครบวงจร Cloud → MQTT TLS → Edge mock → read-back verify)
+  - Check-out OFF → session `SUCCESS`, `verified=true` ✓
+## [2026-08-14] ตั้งค่า .env จริง (Cloud + Edge) ชี้ broker ท้องถิ่น + แก้ dotenv path (Env Config & dotenv Fix)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Codebuff Agent)
+
+**รายละเอียดการอัปเดต:**
+- **สร้าง `.env` จริง 2 ฝั่ง** (gitignored แล้ว): `api/cloudrun/.env` และ `ops/edge-agent/.env` — ชี้ `mqtts://127.0.0.1:8883` + user `hotel` + TLS flag, `BRANCH_ID=branch-a` ตรงกันทั้งคู่, Edge ใช้ `PBX_MODE=mock` (Digital Twin)
+- **เพิ่ม dotenv ให้ Cloud Run:** `api/cloudrun/index.js` เดิมไม่อ่าน `.env` (Cloud Run inject env จาก platform) — เพิ่ม `require('dotenv').config()` + เพิ่ม `dotenv` ใน `package.json` ให้ Local Dev ใช้ไฟล์เดียวกันได้
+- **แก้บั๊ก dotenv path ของ Edge:** `mqtt_agent.js` ใช้ `dotenv.config()` ไม่ระบุ path → อ่าน `.env` จาก cwd แทนโฟลเดอร์ตัวเอง (เจอจาก boot test: injected 0 ตัว) — แก้เป็น `path.join(__dirname, '.env')` → injected ครบ 13 ตัว
+- **หมายเหตุ:** พบว่า shell environment ของเครื่องมี `MQTT_BROKER_URL` ค้าง (broker.hivemq.com) ทำให้ dotenv ไม่ทับ (โดย design env จริงชนะเสมอ — ถูกต้องสำหรับ production) — ไม่ใช่บั๊กของโค้ด แก้โดย unset env นั้นก่อนรันในเครื่อง dev
+- **ผลทดสอบ:** boot ทั้ง 2 ฝั่งจาก `.env` ล้วน → เชื่อมต่อ `mqtts://127.0.0.1:8883` (TLS+auth) สำเร็จ และ E2E เต็มวงจร (check-in ON → SUCCESS verified=true, check-out OFF → SUCCESS verified=true) ผ่าน exit 0
+
+## [2026-08-15] การรวมฐานความรู้ Smart Nurse Call และอัปเดตแผนงานติดตั้ง รพ.ราชเวช ชั้น 11 (Smart Nurse Call & Ratchavej Floor 11 Work Plan Integration)
+
+**ผู้ดำเนินการ:** Senior Software Engineer (Antigravity Agent)
+
+**รายละเอียดการอัปเดต:**
+- **การบูรณาการระบบฐานความรู้ (SNC Knowledge Base Integration):**
+  - เชื่อมโยงฐานความรู้ระบบเรียกพยาบาลอย่างละเอียด [phonik_nurse_call_knowledge.md](file:///c:/Users/Nithep/ไดรฟ์ของฉัน%20(cnithep@gmail.com)/snc/doc/wiki/phonik_nurse_call_knowledge.md) เข้ากับไฟล์ทักษะหลักของโครงการ [.agents/skills/Phonik_SNC_Hardware_Spec/SKILL.md](file:///c:/Users/Nithep/ไดรฟ์ของฉัน%20(cnithep@gmail.com)/shc/.agents/skills/Phonik_SNC_Hardware_Spec/SKILL.md) เพื่อทำเป็น Cross-reference สำหรับ AI Agent และทีมช่างในการอ้างอิงสเปกบอร์ด, การเข้าหัวสาย L/T/R/H, และเลขหมาย P001-P092
+- **การอัปเดตแผนงานตามผังชั้น 11 (รพ.ราชเวช):**
+  - ตรวจรับและผูกแผนงานติดตั้งจริงตามโครงสร้างอาคารและผังเดินสาย [แผนงาน-NC-F11-ราชเวช.md](file:///C:/Users/Nithep/ไดรฟ์ของฉัน%20(cnithep@gmail.com)/T.C.Com/business/active/sales/รพ.ราชเวช/F11-NC/แผนงาน-NC-F11-ราชเวช.md) ของแผนกขาย T.C.Com เพื่อเตรียมความพร้อมนำไปใช้หน้างานจริง
+  - **ข้อค้นพบสำคัญและการวิเคราะห์สต็อก:** วิเคราะห์ตารางเปรียบเทียบอุปกรณ์ที่มีอยู่จากใบแจ้งหนี้จริง (IV3781) เทียบกับจำนวนสถานีติดตั้งจริงของชั้น 11 (27 ห้อง ได้แก่ 1101-1127 และ KEY 2 จุด) พบว่าสต็อกเดิม (DX-STATION 18 สถานี, NCX-CORD 20 เส้น) **ไม่เพียงพอสำหรับการติดตั้งจริง** ซึ่งต้องจัดสั่งเพิ่มอีกอย่างน้อย 9 สถานี และสั่งอุปกรณ์จำพวก NCX-PULL, NCX-LED, KEY station ใหม่ทั้งหมดตามประมาณการใบเสนอราคา 3629
+- **การปรับปรุงแผนโครงการแม่ข่าย (Project Plan Sync):**
+  - อัปเดตแผนโครงการหลักของระบบ [smart_nurse_call_project_plan.md](file:///c:/Users/Nithep/ไดรฟ์ของฉัน%20(cnithep@gmail.com)/snc/doc/wiki/smart_nurse_call_project_plan.md) ในหัวข้อ Phase 5 (Field Deployment & Handover) ให้มีหัวข้อการจัดเตรียมแผนการติดตั้งและการสำรวจสต็อกขาดแคลนเพื่อความรัดกุมและป้องกันปัญหาล่าช้าเมื่อลงพื้นที่จริง
+- **จุดสำคัญที่ยังต้องยืนยัน (Pending Verification List):**
+  - หมายเลขห้องจริงบนผังอาคาร (เนื่องจากรูป F11.jpg ความละเอียดต่ำ), จำนวนเตียงต่อห้องสำหรับคำนวณจำนวน Call Cord, ตำแหน่งติดตั้ง KEY station ทั้ง 2 จุด, และการตรวจรับเทียบจำนวนกับใบเสนอราคา 3629
 

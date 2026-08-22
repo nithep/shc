@@ -26,4 +26,4 @@ https://liff.line.me/2010634930-gRJCLqbu?room=101
 ## 🔗 ลิงก์เชื่อมโยงที่เกี่ยวข้อง (Knowledge Graph)
 - [[index|สารบัญระบบ]]
 - [[user_operation_manual|คู่มือการใช้งานระบบสำหรับผู้ใช้]]
-- [[smart_hotel_comparison|การเปรียบเทียบโมเดลระบบ Smart Hotel]]
+- [[smart-hotel-comparison|การเปรียบเทียบโมเดลระบบ Smart Hotel]]

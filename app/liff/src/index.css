@@ -119,3 +119,27 @@ h1, h2, h3, h4, h5, h6 {
 
 .delay-1 { animation-delay: 0.1s; }
 .delay-2 { animation-delay: 0.2s; }
+
+/* ─── Power Flash Overlay (ไฟสว่างวาบ premium) ─── */
+.power-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background: radial-gradient(circle at center, rgba(250, 204, 21, 0.9), rgba(250, 204, 21, 0) 70%);
+}
+
+/* ─── Preparing Overlay (loading เตรียมห้องพัก) ─── */
+.preparing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  text-align: center;
+  padding: 24px;
+}

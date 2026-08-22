@@ -1,0 +1,4 @@
+# Secrets — ห้าม commit เข้า git
+pwfile
+certs/server.key
+apply.log

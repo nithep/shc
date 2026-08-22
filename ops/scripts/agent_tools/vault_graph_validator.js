@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT_DIR = process.cwd();
-const DOCS_DIR = path.join(ROOT_DIR, 'docs');
+const DOCS_DIR = path.join(ROOT_DIR, 'doc');
 const WIKI_DIR = path.join(DOCS_DIR, 'wiki');
 
 console.log('🔍 Starting Vault Link Integrity & Noise Cleanup Inspection...\n');
@@ -10,7 +10,7 @@ console.log('🔍 Starting Vault Link Integrity & Noise Cleanup Inspection...\n'
 // 1. Scan Wiki Files
 const wikiFiles = fs.readdirSync(WIKI_DIR).filter(f => f.endsWith('.md'));
 const wikiSet = new Set(wikiFiles.map(f => f.replace(/\.md$/, '')));
-console.log(`📁 Total Evergreen Notes in /docs/wiki: ${wikiFiles.length}`);
+console.log(`📁 Total Evergreen Notes in /doc/wiki: ${wikiFiles.length}`);
 
 // Add raw name mappings
 wikiFiles.forEach(f => {
@@ -62,11 +62,11 @@ function checkFileLinks(filePath, relPath) {
 }
 
 // Check index.md
-checkFileLinks(path.join(DOCS_DIR, 'index.md'), 'docs/index.md');
+checkFileLinks(path.join(DOCS_DIR, 'index.md'), 'doc/index.md');
 
 // Check all wiki files
 wikiFiles.forEach(f => {
-  checkFileLinks(path.join(WIKI_DIR, f), `docs/wiki/${f}`);
+  checkFileLinks(path.join(WIKI_DIR, f), `doc/wiki/${f}`);
 });
 
 console.log(`🔗 Checked ${totalLinksChecked} Wiki Links across the Vault.`);

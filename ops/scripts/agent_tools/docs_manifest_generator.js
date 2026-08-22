@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DOCS_RAW = path.join(__dirname, '..', '..', 'docs', 'raw');
+const DOCS_RAW = path.join(__dirname, '..', '..', '..', 'doc', 'raw');
 const MANIFEST_PATH = path.join(DOCS_RAW, 'MANIFEST.sha256');
 
 function getSHA256(filepath) {

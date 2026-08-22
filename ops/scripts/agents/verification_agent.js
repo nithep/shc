@@ -4,12 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const RAW_DIR = path.join(__dirname, '../../doc/raw');
+const RAW_DIR = path.join(__dirname, '../../../doc/raw');
 const ARCHIVE_DIR = path.join(RAW_DIR, 'archive');
-const WIKI_DIR = path.join(__dirname, '../../doc/wiki');
+const WIKI_DIR = path.join(__dirname, '../../../doc/wiki');
 const MANIFEST_PATH = path.join(RAW_DIR, 'MANIFEST.sha256');
-const INDEX_PATH = path.join(__dirname, '../../doc/index.md');
-const LOG_PATH = path.join(__dirname, '../../doc/log.md');
+const INDEX_PATH = path.join(__dirname, '../../../doc/index.md');
+const LOG_PATH = path.join(__dirname, '../../../doc/log.md');
 
 // Helper to calculate SHA-256 of a file
 function calculateSHA256(filePath) {
@@ -44,7 +44,7 @@ function readManifest() {
 
 // Recalculate entire raw directory manifest
 function updateManifest() {
-    console.log('[Verification Agent] Recalculating docs/raw/MANIFEST.sha256...');
+    console.log('[Verification Agent] Recalculating doc/raw/MANIFEST.sha256...');
     
     const manifestEntries = [];
     
@@ -132,7 +132,7 @@ function runVerification() {
             continue;
         }
         
-        const originalFilePath = path.join(__dirname, '../../', originalFileRel);
+        const originalFilePath = path.join(__dirname, '../../../', originalFileRel);
         
         if (!fs.existsSync(originalFilePath)) {
             console.warn(`[Verification Agent] ⚠️ Original file not found for draft ${file}: ${originalFilePath}. Skipping.`);

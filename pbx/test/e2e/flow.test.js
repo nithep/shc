@@ -25,7 +25,7 @@ describe('E2E Full Flow Test (API → PBX Simulator)', () => {
     
     pbxServer.listen(PBX_PORT, '127.0.0.1', () => {
       // 2. สตาร์ท Backend Express Server เป็น Child Process
-      const serverPath = path.resolve(__dirname, '../../../backend/server.js');
+      const serverPath = path.resolve(__dirname, '../../../api/server.js');
       
       backendProcess = spawn('node', [serverPath], {
         env: {

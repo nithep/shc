@@ -39,7 +39,7 @@ jobs:
             
           IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/cloud-run-source-deploy/${{ env.SERVICE_NAME }}:${{ github.sha }}"
           
-          cd backend
+          cd api/cloudrun
           docker build -t $IMAGE .
           docker push $IMAGE
           

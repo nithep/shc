@@ -4,7 +4,7 @@
 const { exec } = require('child_process');
 const path = require('path');
 
-const PBX_CONNECTOR_DIR = path.join(__dirname, '..', '..', 'pbx-connector');
+const PBX_CONNECTOR_DIR = path.join(__dirname, '..', '..', '..', 'pbx');
 
 console.log('🧪 Running Test Suite and generating report...');
 console.log('========================================');

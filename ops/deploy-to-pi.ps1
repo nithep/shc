@@ -4,7 +4,7 @@
 $PiUser = "ecs-agent"
 $PiHost = "192.168.1.94"
 $PiPath = "/home/ecs-agent/nithep/shc"
-$ProjectRoot = $PSScriptRoot
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Hotel-ECS Deployment to Raspberry Pi" -ForegroundColor Cyan
@@ -22,7 +22,7 @@ try {
     New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
     # คัดลอกโฟลเดอร์ที่จำเป็นแบบข้าม node_modules และไฟล์ขยะ
-    $FoldersToCopy = @("backend", "frontend", "pbx-connector", "docs", "scripts", "worker", "vpn-setup")
+    $FoldersToCopy = @("api", "app", "pbx", "doc", "ops")
     foreach ($folder in $FoldersToCopy) {
         if (Test-Path "$ProjectRoot\$folder") {
             $dest = "$TempDir\$folder"

@@ -93,7 +93,7 @@ while ($true) {
             ssh -i C:\Users\Nithep\.ssh\id_rsa -o StrictHostKeyChecking=no ecs-agent@192.168.1.94 "docker logs --tail 100 -f hotel-app"
         }
         "7" {
-            $docsPath = Join-Path $PSScriptRoot "..\docs"
+            $docsPath = Join-Path $PSScriptRoot "..\..\doc"
             if (Test-Path $docsPath) {
                 Start-Process explorer.exe -ArgumentList $docsPath
             } else {

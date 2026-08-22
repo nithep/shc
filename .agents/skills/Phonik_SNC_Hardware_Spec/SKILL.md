@@ -7,6 +7,11 @@ description: สเปกฮาร์ดแวร์ ยุทธศาสตร
 
 ทักษะนี้เก็บบันทึกข้อมูลความรู้และยุทธศาสตร์ทั้งหมดของ **ระบบ Smart Nurse Call (SNC)** สำหรับโรงพยาบาลและศูนย์ดูแลผู้ป่วยแบบเฉพาะเจาะจง (Dedicated SNC Memory)
 
+> [!NOTE]
+> **ฐานความรู้และแผนงานอัปเดตสำหรับโรงพยาบาลราชเวช (เชียงใหม่):**
+> - **ฐานความรู้อย่างละเอียด (Hardware, Wiring, Config, และประวัติการจัดซื้อจริง):** ดูที่ [phonik_nurse_call_knowledge.md](file:///c:/Users/Nithep/ไดรฟ์ของฉัน%20(cnithep@gmail.com)/snc/doc/wiki/phonik_nurse_call_knowledge.md)
+> - **แผนการติดตั้งระบบจริง ชั้น 11 (27 สถานีห้อง + 2 KEY):** ดูที่ [แผนงาน-NC-F11-ราชเวช.md](file:///C:/Users/Nithep/ไดรฟ์ของฉัน%20(cnithep@gmail.com)/T.C.Com/business/active/sales/รพ.ราชเวช/F11-NC/แผนงาน-NC-F11-ราชเวช.md)
+
 ---
 
 ## 🏥 1. โครงสร้างซอฟต์แวร์และยุทธศาสตร์อธิปไตย (SNC Software & Sovereignty Strategy)

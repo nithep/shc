@@ -3,8 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const RAW_DIR = path.join(__dirname, '../../doc/raw');
-const WIKI_DIR = path.join(__dirname, '../../doc/wiki');
+const RAW_DIR = path.join(__dirname, '../../../doc/raw');
+const WIKI_DIR = path.join(__dirname, '../../../doc/wiki');
 
 // Helper to parse frontmatter and body
 function parseMarkdown(content) {
@@ -118,7 +118,7 @@ function runSynthesis() {
 title: "${title}"
 status: "draft"
 synthesized_at: "${new Date().toISOString()}"
-original_file: "docs/raw/${file}"
+original_file: "doc/raw/${file}"
 original_source: "${source}"
 original_author: "${author}"
 ---
@@ -146,7 +146,7 @@ ${citations.join('\n')}` : ''}
             const draftPath = path.join(WIKI_DIR, draftFileName);
             
             fs.writeFileSync(draftPath, draftContent, 'utf8');
-            console.log(`[Synthesis Agent] Draft saved: docs/wiki/${draftFileName}`);
+            console.log(`[Synthesis Agent] Draft saved: doc/wiki/${draftFileName}`);
             distilledCount++;
         }
     }

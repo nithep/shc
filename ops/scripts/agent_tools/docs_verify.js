@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DOCS_RAW = path.join(__dirname, '..', '..', 'docs', 'raw');
+const DOCS_RAW = path.join(__dirname, '..', '..', '..', 'doc', 'raw');
 const MANIFEST_PATH = path.join(DOCS_RAW, 'MANIFEST.sha256');
 
 function getSHA256(filepath) {
@@ -18,7 +18,7 @@ function verify() {
   console.log('========================================');
 
   if (!fs.existsSync(MANIFEST_PATH)) {
-    console.error('❌ Error: MANIFEST.sha256 not found in docs/raw/');
+    console.error('❌ Error: MANIFEST.sha256 not found in doc/raw/');
     process.exit(1);
   }
 
@@ -63,7 +63,7 @@ function verify() {
   }
 
   let failed = false;
-  console.log(`Checking ${filesToCheck.length} files in docs/raw/...`);
+  console.log(`Checking ${filesToCheck.length} files in doc/raw/...`);
 
   for (const file of filesToCheck) {
     const actualHash = getSHA256(file.fullPath);

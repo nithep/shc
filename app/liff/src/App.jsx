@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CheckIn from './CheckIn';
 import { Loader2, AlertCircle } from 'lucide-react';
 
-const LIFF_ID = import.meta.env.VITE_LIFF_ID || "dummy-liff-id";
+const LIFF_ID = import.meta.env.VITE_LIFF_ID || "2010634930-gRJCLqbu";
 
 export default function App() {
   const [profile, setProfile] = useState(null);
@@ -14,7 +14,7 @@ export default function App() {
       try {
         if (!window.liff) throw new Error("LIFF SDK not loaded");
 
-        if (LIFF_ID !== "dummy-liff-id") {
+        if (LIFF_ID && LIFF_ID !== "dummy-liff-id") {
           // Wait for liff to be fully initialized from main.jsx
           await window.liff.ready;
 

@@ -12,13 +12,13 @@ const rootDir = path.resolve(__dirname, '..');
 console.log('🚀 กำลังเปิดบริการ Backend และ PBX Simulator สำหรับการทดสอบผ่านมือถือ...');
 
 // 1. เปิด PBX Simulator
-const pbxProcess = spawn('node', ['pbx-connector/simulator/pbx-simulator.js', '--port', '10001', '--delay', '20', '--nack-room', '103'], {
+const pbxProcess = spawn('node', ['pbx/simulator/pbx-simulator.js', '--port', '10001', '--delay', '20', '--nack-room', '103'], {
     cwd: rootDir,
     stdio: 'inherit'
 });
 
 // 2. เปิด Backend Server (เสิร์ฟทั้ง API และ Frontend บนพอร์ต 3000)
-const backendProcess = spawn('node', ['backend/server.js'], {
+const backendProcess = spawn('node', ['api/server.js'], {
     cwd: rootDir,
     env: {
         ...process.env,
@@ -27,7 +27,7 @@ const backendProcess = spawn('node', ['backend/server.js'], {
         PBX_HOST: '127.0.0.1',
         PBX_PORT: '10001',
         ENFORCE_SCHEDULE: 'false',
-        DATABASE_PATH: path.join(rootDir, 'backend', 'hotel.db')
+        DATABASE_PATH: path.join(rootDir, 'api', 'hotel.db')
     },
     stdio: 'inherit'
 });

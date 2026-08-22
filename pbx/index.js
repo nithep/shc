@@ -194,6 +194,17 @@ class MockTransport extends EventEmitter {
       return `==PWER${room}=${statusStrResp}${protocol.TERMINATOR}`;
     }
 
+    // ── PWER=ALL (Read-back verification, multi-line) ──
+    if (cmd === '..PWER=ALL') {
+      const lines = [];
+      for (const [room, roomData] of this._rooms.entries()) {
+        const statusStr = roomData.status === protocol.ROOM_STATUS.ON ? 'on' : 'off';
+        lines.push(`==PWER${room}=${statusStr}`);
+      }
+      lines.push('==ACKW');
+      return lines.join(protocol.TERMINATOR);
+    }
+
     // ── NAME commands ──
     const setNameMatch = cmd.match(/^\.\.NAME(\d{1,4})=(.+)$/);
     if (setNameMatch) {
