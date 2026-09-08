@@ -2099,6 +2099,28 @@ Be concise. Answer in Thai. Provide direct command line suggestions with copyabl
     }
 });
 
+// ─── Top-level Health + Product Docs (SNC parity: /health, /docs) ───────────
+// ต้องอยู่ก่อน express.static / SPA fallback ไม่ให้ React Router กลืน
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        service: 'shc-api',
+        uptime: Math.floor(process.uptime()),
+        pbxConnected: pbx.isReady,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Product Docs (Actcast pattern) — redirect ไป docs hub จนกว่าจะ build docs static จาก doc/wiki
+app.get('/docs', (req, res) => {
+    const base = (process.env.SHC_DOCS_URL || 'https://docs.nithep.com').replace(/\/+$/, '') || 'https://docs.nithep.com';
+    res.redirect(302, base);
+});
+app.get('/docs/', (req, res) => {
+    const base = (process.env.SHC_DOCS_URL || 'https://docs.nithep.com').replace(/\/+$/, '') || 'https://docs.nithep.com';
+    res.redirect(302, base);
+});
+
 // Serve Frontend Static Files
 app.use(express.static(path.join(__dirname, '../app/dist')));
 
