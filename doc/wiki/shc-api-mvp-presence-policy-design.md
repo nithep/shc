@@ -204,3 +204,16 @@ ALTER TABLE rooms ADD COLUMN warned BOOLEAN NOT NULL DEFAULT 0;
 | 5 | "ตัวตรวจ 60 วิ" | timestamp-based: ตัวตรวจตื่นทุก 60 วิ คำนวณเวลาผ่านจาก timestamp ที่เก็บ (สเปก §4) — ไม่ใช่นาฬิกานับถอยหลังรายห้อง |
 | 6 | Notifier | stub (log อย่างเดียว) ตลอด MVP |
 | 7 | Deployment | สร้างลง Pi monolith เท่านั้น — **ห้ามลง `api/cloudrun/`** |
+
+### 9.3 Gate 2 Review Corrections (2026-10-20 — Muse re-review, ก้อน B)
+บันทึกหลัง commit ก้อน B (`dd8f144`) — แก้ 5 จุด ความปลอดภัยเป็นหลัก (follow-up commit):
+
+| # | ประเด็น | คำตัดสิน/แก้ |
+|---|---|---|
+| 1 | นาฬิกา idle | **idle = now − `last_door_open_at`** (door = พยานหลัก) — presence อย่างเดียวห้ามขับ ECO ใน MVP |
+| 2 | ตัวตรวจ 60 วิ | ต้องเช็ก sleep guard + `door_closed` (ประตูเปิดค้าง → alert พนักงาน + ห้าม ECO) — แก้ทั้ง `policy_verifier.evaluateIdle` และ `cron_scheduler.runPresenceIdleRound` |
+| 3 | ความหมายคำสั่ง | **`eco_on` = เข้าโหมด ECO (ตัดไฟ)** · **`eco_off` = คืนไฟ** — ด่านกลางคืน (§5 rule 4) ต้องบล็อก `eco_on` ใน verifier |
+| 4 | ชื่อกฎ R4 | R4 = **door open too long** (ไม่ใช่ sensor silent/heartbeat) — เปลี่ยนชื่อเป็น `rule4_night_no_eco_on` / `rule4_door_open_too_long`; heartbeat จริงเป็นงานเฟิร์มแวร์โหนด (ก้อน C) |
+| 5 | เทสต์ | เขียนใหม่แบบ spec-based (§4/§5/§8) ไม่ใช่ code-based — เพิ่มเคส 23:00 door idle 2 ชม. → ไม่ ECO · ประตูแง้ม → alert ไม่ ECO · ไม่มี presence data + door idle 30 นาที → ECO · presence empty แต่ประตูเพิ่งเปิด → ไม่ ECO · override → ไม่ ECO |
+
+**ก้อน C (non-blocking):** `presence_subscriber` fail-closed หาก `MQTT_BROKER_URL` ว่าง (ห้าม public HiveMQ default ตอน deploy) + credential แยกต่อ service

@@ -15,12 +15,20 @@
  * │ Hardware StateVerifier    │  ← ของเดิม (frozen) — ตรวจ ACK/state จริง
  * └──────────────────────────┘
  *
+ * ── ความหมายคำสั่ง (สเปก §5 — ยืนยัน Gate 2) ────────────────────────────────
+ *   eco_on  = เข้าโหมด ECO (ตัดไฟ)         ← ด่านกลางคืนกันคำสั่งนี้
+ *   eco_off = ออกจากโหมด ECO (คืนไฟปกติ)
+ *
  * Checklist 5 ข้อ (ลำดับตามสเปก §5):
  *   1) override locked → deny
  *   2) state transition legal? (VACANT→ECO illegal) → deny
  *   3) relay already at target state → skip (idempotency)
- *   4) safety: night no eco_on / door sensor silent > X min → deny + alert
+ *   4) safety: กลางคืนห้าม eco_on / ประตูเปิดค้าง > X นาที (door-open-too-long) → deny + alert
  *   5) relay same room command < 2 min apart → deny
+ *
+ * ── นาฬิกา idle (§4) ─────────────────────────────────────────────────────────
+ *   idle = now − last_door_open_at   (door = พยานหลัก)
+ *   presence อย่างเดียวห้ามขับ ECO ใน MVP (ใช้เป็นข้อมูลประกอบ/occupancy เท่านั้น)
  *
  * กฎเหล็ก: ทุก path ที่จะไปถึง relay ต้องผ่าน verify() — log ทุก denial
  *           (room/command/rule/time/reason) — **ห้ามแตะ hardware verifier ตัวเดิม**
@@ -42,8 +50,8 @@ const DECISION = Object.freeze({
 });
 
 const COMMAND = Object.freeze({
-    ECO_ON: 'eco_on',   // is equivalent to check-in / room ON
-    ECO_OFF: 'eco_off', // ตัดไฟ
+    ECO_ON: 'eco_on',   // เข้าโหมด ECO = ตัดไฟ (สเปก §5)
+    ECO_OFF: 'eco_off', // ออกจากโหมด ECO = คืนไฟปกติ
     DIM: 'dim',         // หรี่ไฟ
 });
 
@@ -51,8 +59,8 @@ const RULE = Object.freeze({
     R1_OVERRIDE_LOCKED: 'rule1_override_locked',
     R2_ILLEGAL_TRANSITION: 'rule2_illegal_transition',
     R3_IDEMPOTENT: 'rule3_idempotent_skip',
-    R4_SAFETY: 'rule4_safety',
-    R4_DOOR_SILENT: 'rule4_door_sensor_silent',
+    R4_NIGHT_GUARD: 'rule4_night_no_eco_on',
+    R4_DOOR_OPEN_TOO_LONG: 'rule4_door_open_too_long',
     R5_RELAY_FLAP: 'rule5_relay_flap',
     OK: 'ok',
 });
@@ -115,7 +123,7 @@ class PolicyVerifier {
         if (this.decisions.length > 500) this.decisions.shift();
 
         if (entry.decision !== DECISION.ALLOW) {
-            const line = `[policy_verifier] ${new Date(entry.time).toISOString()} DENY room=${entry.room} command=${entry.command} rule=${entry.rule} reason="${entry.reason}"`;
+            const line = `[policy_verifier] ${new Date(entry.time).toISOString()} ${entry.decision.toUpperCase()} room=${entry.room} command=${entry.command} rule=${entry.rule} reason="${entry.reason}"`;
             try {
                 ensureDir(config.logDir);
                 const day = new Date().toISOString().slice(0, 10);
@@ -174,60 +182,47 @@ class PolicyVerifier {
             this._record(entry);
             return { decision: DECISION.DENY, rule, reason };
         };
+        const skip = (reason) => {
+            const entry = { room, command, decision: DECISION.SKIP, rule: RULE.R3_IDEMPOTENT, reason, time: now };
+            this._record(entry);
+            return { decision: DECISION.SKIP, rule: RULE.R3_IDEMPOTENT, reason };
+        };
         const allow = () => {
             const entry = { room, command, decision: DECISION.ALLOW, rule: RULE.OK, reason: 'policy passed', time: now };
             this._record(entry);
             return { decision: DECISION.ALLOW, rule: RULE.OK, reason: 'policy passed' };
         };
 
-        // ── ข้อ 1: override locked → deny ──────────────────────────────────────
+        // ── ข้อ 1: override locked → deny (ทุกคำสั่ง) ─────────────────────────
         if (overrideLocked) {
             return deny(RULE.R1_OVERRIDE_LOCKED, 'room override is locked');
         }
 
-        if (command === COMMAND.ECO_OFF) {
+        if (command === COMMAND.ECO_ON) {
+            // eco_on = เข้าโหมด ECO (ตัดไฟ)
+
             // ── ข้อ 2: state transition legal (VACANT→ECO illegal) ─────────────
             if (status === 'vacant') {
-                return deny(RULE.R2_ILLEGAL_TRANSITION, 'illegal transition VACANT→ECO (already off/vacant)');
+                return deny(RULE.R2_ILLEGAL_TRANSITION, 'illegal transition VACANT→ECO (room vacant)');
             }
 
-            // ── ข้อ 3: relay already at target state → skip (idempotent) ───────
+            // ── ข้อ 3: relay already OFF (ECO state) → skip (idempotent) ───────
             if (power === false) {
-                const entry = { room, command, decision: DECISION.SKIP, rule: RULE.R3_IDEMPOTENT, reason: 'relay already OFF', time: now };
-                this._record(entry);
-                return { decision: DECISION.SKIP, rule: RULE.R3_IDEMPOTENT, reason: 'relay already OFF' };
+                return skip('relay already OFF (eco state)');
             }
 
-            // ── ข้อ 4: safety — night no eco_on (ไม่เกี่ยว eco_off), door silent ─
-            if (lastDoorOpenAt && !doorClosed) {
-                const silentMin = (now - new Date(lastDoorOpenAt).getTime()) / 60000;
-                if (Number.isFinite(silentMin) && silentMin > config.doorSensorTimeoutMin) {
-                    this._alert(room, `door sensor silent ${silentMin.toFixed(1)} min > X=${config.doorSensorTimeoutMin} min`);
-                    return deny(RULE.R4_DOOR_SILENT, `door sensor silent ${silentMin.toFixed(1)} min > X=${config.doorSensorTimeoutMin} min`);
-                }
-            }
-
-            // ── ข้อ 5: relay same room command < 2 min apart → deny ────────────
-            if (lastRelayAt && (now - lastRelayAt) < config.relayMinIntervalMin * 60000) {
-                const gapSec = ((now - lastRelayAt) / 1000).toFixed(0);
-                return deny(RULE.R5_RELAY_FLAP, `relay command ${gapSec}s apart < ${config.relayMinIntervalMin} min`);
-            }
-
-            return allow();
-        }
-
-        if (command === COMMAND.ECO_ON) {
-            // ── ข้อ 4: safety — night no eco_on ───────────────────────────────
+            // ── ข้อ 4a: กลางคืนห้าม eco_on (ตัดไฟ) — §5 ข้อ 4 ─────────────────
             if (this._isSleepGuardActive(now)) {
-                return deny(RULE.R4_SAFETY, `sleep guard active (${config.sleepGuardStartHour}:00–${config.sleepGuardEndHour}:00) — no eco_on`);
+                return deny(RULE.R4_NIGHT_GUARD, `sleep guard active (${config.sleepGuardStartHour}:00–${config.sleepGuardEndHour}:00) — no eco_on`);
             }
 
-            // ── ข้อ 2: transition legal (VACANT→ECO_ON คือ check-in ปกติ = legal)
-            //    แต่ OCCUPIED→ECO_ON ที่ power on อยู่แล้ว = idempotent skip
-            if (power === true && status === 'occupied') {
-                const entry = { room, command, decision: DECISION.SKIP, rule: RULE.R3_IDEMPOTENT, reason: 'relay already ON', time: now };
-                this._record(entry);
-                return { decision: DECISION.SKIP, rule: RULE.R3_IDEMPOTENT, reason: 'relay already ON' };
+            // ── ข้อ 4b: ประตูเปิดค้าง > X นาที (door-open-too-long) → deny + alert
+            //    ⚠️ ไม่ใช่ "sensor silent/heartbeat" — heartbeat จริงเป็นงานเฟิร์มแวร์โหนด (ก้อน C)
+            if (this._isDoorOpenTooLong(lastDoorOpenAt, doorClosed, now)) {
+                const openMin = ((now - new Date(lastDoorOpenAt).getTime()) / 60000).toFixed(1);
+                const msg = `door open ${openMin} min > X=${config.doorSensorTimeoutMin} min (door-open-too-long)`;
+                this._alert(room, msg);
+                return deny(RULE.R4_DOOR_OPEN_TOO_LONG, msg);
             }
 
             // ── ข้อ 5: relay same room command < 2 min apart → deny ────────────
@@ -239,7 +234,25 @@ class PolicyVerifier {
             return allow();
         }
 
-        // คำสั่งอื่น (dim ฯลฯ) — ใน MVP ให้ผ่าน policy พื้นฐาน (override/night handled)
+        if (command === COMMAND.ECO_OFF) {
+            // eco_off = ออกจากโหมด ECO (คืนไฟปกติ)
+
+            // ── ข้อ 3: relay already ON → skip (idempotent) ────────────────────
+            if (power === true) {
+                return skip('relay already ON (not in eco state)');
+            }
+
+            // ── ข้อ 5: relay same room command < 2 min apart → deny ────────────
+            if (lastRelayAt && (now - lastRelayAt) < config.relayMinIntervalMin * 60000) {
+                const gapSec = ((now - lastRelayAt) / 1000).toFixed(0);
+                return deny(RULE.R5_RELAY_FLAP, `relay command ${gapSec}s apart < ${config.relayMinIntervalMin} min`);
+            }
+
+            // เปิดไฟกลางคืนทำได้ (ด่านกลางคืนคุมเฉพาะ eco_on)
+            return allow();
+        }
+
+        // คำสั่งอื่น (dim ฯลฯ) — ใน MVP ให้ผ่าน policy พื้นฐาน (override handled)
         return allow();
     }
 
@@ -271,9 +284,11 @@ class PolicyVerifier {
             let hardwareResult;
             if (this.hardwareVerifier && typeof this.hardwareVerifier.verify === 'function') {
                 hardwareResult = await this.hardwareVerifier.verify(req.room, req.command);
-            } else if (req.command === COMMAND.ECO_OFF) {
-                hardwareResult = await this.pbx.checkOut(req.room);
             } else if (req.command === COMMAND.ECO_ON) {
+                // eco_on = ตัดไฟ → pbx.checkOut
+                hardwareResult = await this.pbx.checkOut(req.room);
+            } else if (req.command === COMMAND.ECO_OFF) {
+                // eco_off = คืนไฟ → pbx.checkIn
                 hardwareResult = await this.pbx.checkIn(req.room);
             }
             this._lastRelayAt.set(String(req.room), this.now());
@@ -301,6 +316,17 @@ class PolicyVerifier {
     }
 
     /**
+     * ประตูเปิดค้างนานเกิน X นาที หรือไม่ (door-open-too-long)
+     * เงื่อนไข: มี last_door_open_at, ประตูยังไม่ปิด, และเปิดค้าง > X นาที
+     * @private
+     */
+    _isDoorOpenTooLong(lastDoorOpenAt, doorClosed, nowMs) {
+        if (!lastDoorOpenAt || doorClosed) return false;
+        const openMin = (nowMs - new Date(lastDoorOpenAt).getTime()) / 60000;
+        return Number.isFinite(openMin) && openMin > config.doorSensorTimeoutMin;
+    }
+
+    /**
      * ส่ง alert ผ่าน notifier (stub ใน MVP) — log อย่างเดียว
      * @private
      */
@@ -315,18 +341,22 @@ class PolicyVerifier {
     }
 
     /**
-     * ตรวจ idle จาก timestamp (ใช้โดย 60s checker) — คำนวณ elapsed จาก last_presence_at
-     * @param {Object} room - แถวจาก DB (มี id, status, last_presence_at, warned)
+     * ตรวจ idle จาก door timestamp (สเปก §4: idle = now − last_door_open_at)
+     *
+     * @param {Object} room - แถวจาก DB (มี id, last_door_open_at, door_closed, warned)
      * @param {number} nowMs
-     * @returns {{idleMin:number, thresholdMin:number, shouldWarn:boolean, shouldEcoOff:boolean}}
+     * @returns {{idleMin:number, thresholdMin:number, shouldWarn:boolean, shouldEcoOn:boolean, doorOpenTooLong:boolean, hasDoorWitness:boolean}}
      */
     evaluateIdle(room, nowMs) {
         const thresholdMin = idleThresholdForRoom(room.id);
-        const lastPresentMs = room.last_presence_at ? new Date(room.last_presence_at).getTime() : null;
-        const idleMin = lastPresentMs ? (nowMs - lastPresentMs) / 60000 : 0;
-        const shouldWarn = idleMin >= (thresholdMin - config.warnLeadMin) && idleMin < thresholdMin;
-        const shouldEcoOff = idleMin >= thresholdMin;
-        return { idleMin, thresholdMin, shouldWarn, shouldEcoOff };
+        const doorClosed = room.door_closed === 1 || room.door_closed === true;
+        const lastDoorMs = room.last_door_open_at ? new Date(room.last_door_open_at).getTime() : null;
+        const hasDoorWitness = Number.isFinite(lastDoorMs);
+        const idleMin = hasDoorWitness ? (nowMs - lastDoorMs) / 60000 : 0;
+        const shouldWarn = hasDoorWitness && idleMin >= (thresholdMin - config.warnLeadMin) && idleMin < thresholdMin;
+        const shouldEcoOn = hasDoorWitness && idleMin >= thresholdMin;
+        const doorOpenTooLong = this._isDoorOpenTooLong(room.last_door_open_at, doorClosed, nowMs);
+        return { idleMin, thresholdMin, shouldWarn, shouldEcoOn, doorOpenTooLong, hasDoorWitness };
     }
 }
 

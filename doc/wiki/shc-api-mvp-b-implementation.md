@@ -50,21 +50,28 @@ idempotent — SQLite จะ error `duplicate column name` ถ้ามีอย
 
 ## 4. Policy Verifier — Checklist 5 ข้อ (§5)
 
+**ความหมายคำสั่ง (สเปก §5 — ยืนยัน Gate 2):** `eco_on` = เข้าโหมด ECO (ตัดไฟ) · `eco_off` = คืนไฟ
+
 | ลำดับ | กฎ | ผล |
 |---|---|---|
 | 1 | override locked | deny (`rule1_override_locked`) |
 | 2 | VACANT→ECO illegal | deny (`rule2_illegal_transition`) |
 | 3 | relay already at target | skip (`rule3_idempotent_skip`) |
-| 4 | night no eco_on / door silent > X | deny + alert (`rule4_*`) |
+| 4a | กลางคืนห้าม `eco_on` (ตัดไฟ) | deny (`rule4_night_no_eco_on`) |
+| 4b | ประตูเปิดค้าง > X (door-open-too-long) | deny + alert (`rule4_door_open_too_long`) |
 | 5 | relay same room < 2 min | deny (`rule5_relay_flap`) |
 
+- **นาฬิกา idle (§4): `idle = now − last_door_open_at`** (door = พยานหลัก) — presence อย่างเดียวห้ามขับ ECO ใน MVP
 - ทุก denial log (room/command/rule/time/reason) ลง `D:\_scripts\logs\shc-policy-YYYY-MM-DD.log` + audit log
 - policy = deny → ไม่เรียก hardware verifier เลย
 - **ห่อ** hardware verifier — ไม่แก้ภายใน
+- ⚠️ `rule4_door_open_too_long` = ประตูเปิดค้าง (พฤติกรรมจริง) — **ไม่ใช่** sensor heartbeat (งานเฟิร์มแวร์โหนด ก้อน C)
 
-## 5. ค่า X — ข้อเสนอ B6
+## 5. ค่า X — B6
 
 **X = 10 นาที** (`SHC_DOOR_SENSOR_TIMEOUT_MIN`, default 10) — **Mnemo ยืนยันแล้ว** (Gate 2, 2026-10-20 01:54)
+
+พฤติกรรมจริง = **door-open-too-long** (ประตูเปิดค้าง > X → deny + alert) ไม่ใช่ sensor silent
 
 เหตุผล:
 1. idle ปกติ 20 นาที → X = 50% ของ idle → จับได้ก่อนถึงรอบตัดไฟ
@@ -72,15 +79,15 @@ idempotent — SQLite จะ error `duplicate column name` ถ้ามีอย
 3. 10 นาทีอ่านง่ายสำหรับพนักงาน และไม่สั้นจนเกิด false positive
 4. เป็น deny+alert เท่านั้น (ไม่ตัดไฟเอง) → เลือก conservative
 
-> ต้องยืนยันที่ gate 2 (Mnemo)
+## 6. ตัวตรวจ 60 วิ (B5) — door timestamp-based
 
-## 6. ตัวตรวจ 60 วิ (B5) — timestamp-based
-
-- cron ตื่นทุก 60 วิ (`SHC_CHECKER_CRON`) → คำนวณ elapsed จาก `last_presence_at`
-- **dry-run บังคับ** (`SHC_POLICY_DRY_RUN=true` ตลอด MVP) → ไม่ยิง eco_off จริง
+- cron ตื่นทุก 60 วิ (`SHC_CHECKER_CRON`) → คำนวณ elapsed จาก **`last_door_open_at`** (§4)
+- พิจารณาห้อง check-in (occupied) — ไม่ต้องมี presence data (เส้นทาง pilot §10)
+- ประตูเปิดค้าง > X → alert พนักงาน + **ห้าม ECO**
+- **dry-run บังคับ** (`SHC_POLICY_DRY_RUN=true` ตลอด MVP) → ไม่ยิง eco_on จริง
 - notifier = stub (log เท่านั้น)
-- dim/warn เมื่อ idle ≥ threshold − warnLead (1 นาที)
-- sleep guard 22:00–06:00 (คุมเฉพาะ eco_on)
+- dim/warn เมื่อ door idle ≥ threshold − warnLead (1 นาที)
+- sleep guard 22:00–06:00 (ด่านอยู่ใน verifier — คุมเฉพาะ `eco_on`/ตัดไฟ)
 
 ## 7. Route ใหม่ (B3)
 
@@ -97,9 +104,17 @@ idempotent — SQLite จะ error `duplicate column name` ถ้ามีอย
 | ชุด | จำนวน | ผล |
 |---|---|---|
 | B2 migration (idempotent) | 2 | ✅ |
-| B4 policy_verifier (checklist + acceptance §8) | 14 | ✅ |
+| B4 policy_verifier (checklist §5 + idle §4) | 15 | ✅ |
 | B1 presence_subscriber (contract + T6/T7) | 9 | ✅ |
-| B5 idle checker | 6 | ✅ |
-| **รวม** | **31** | **✅ ผ่านทั้งหมด** |
+| B5 door idle checker (§8 cases) | 9 | ✅ |
+| **รวม** | **35** | **✅ ผ่านทั้งหมด** |
 
-Integration smoke (server mock PBX): `/health` OK, door event persist, presence reflect, override (owner) OK, staff→owner 403, policy decisions live
+เคส §8 ที่เพิ่ม (spec-based): 23:00 door idle 2 ชม. → ไม่ ECO · ประตูแง้ม → alert ไม่ ECO · ห้องไม่มี presence data + door idle 30 นาที → ECO · presence empty แต่ประตูเพิ่งเปิด → ไม่ ECO · override → ไม่ ECO
+
+Integration smoke (server mock PBX): `/health` OK, door event persist, presence reflect, override (owner) OK, staff→owner 403, policy decisions live (dryRun=on)
+
+## 9. รายการ ก้อน C (non-blocking)
+
+- `presence_subscriber` ต้อง fail-closed หาก `MQTT_BROKER_URL` ว่าง (ห้ามใช้ public HiveMQ default ตอน deploy) + credential แยกต่อ service
+- sensor heartbeat จริงของเซ็นเซอร์ประตู (node firmware)
+- defect ที่รู้ (deferred): cloud connector subscribe `hotel/<branchId>/status` แต่ edge publish `hotel/<BRANCH_ID>/edge/status` → heartbeat อาจไม่ถึง cloud

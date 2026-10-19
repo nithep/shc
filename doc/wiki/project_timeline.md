@@ -1630,3 +1630,23 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - `api/test/` (4 test files + run_all.js)
 - `doc/wiki/shc-api-mvp-b-implementation.md` (Implementation note)
 
+## [2026-10-20] ก้อน B — Gate 2 Review Corrections (Safety Fix, post `dd8f144`)
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**บริบท:** Muse re-review หลัง commit ก้อน B คืน 5 จุดแก้ด้านความปลอดภัย — follow-up commit
+
+**จุดแก้:**
+- **#1 นาฬิกา idle (§4):** เปลี่ยนเป็น **`idle = now − last_door_open_at`** (door = พยานหลัก) — presence อย่างเดียวห้ามขับ ECO ใน MVP
+- **#2 ตัวตรวจ 60 วิ:** เช็ก sleep guard + `door_closed`; ประตูเปิดค้าง → alert พนักงาน + ห้าม ECO — แก้ทั้ง `policy_verifier.evaluateIdle` และ `cron_scheduler.runPresenceIdleRound`
+- **#3 ความหมายคำสั่ง:** `eco_on` = ตัดไฟ · `eco_off` = คืนไฟ — ด่านกลางคืนบล็อก `eco_on` ใน verifier; idempotency keyed ที่ `power`
+- **#4 ชื่อกฎ R4:** → `rule4_night_no_eco_on` / `rule4_door_open_too_long` (พฤติกรรมจริง = door open too long ไม่ใช่ sensor silent); heartbeat จริง = งานเฟิร์มแวร์ ก้อน C
+- **#5 เทสต์:** เขียนใหม่ spec-based (§4/§5/§8) — เพิ่มเคส 23:00 door idle 2 ชม. → ไม่ ECO, ประตูแง้ม → alert ไม่ ECO, ไม่มี presence data + door idle 30 นาที → ECO, presence empty แต่ประตูเพิ่งเปิด → ไม่ ECO, override → ไม่ ECO
+
+**ผลทดสอบ:** `npm run test:shc` **35/35** ผ่าน (B2=2, B4=15, B1=9, B5=9) + integration smoke mock PBX OK
+
+**Artifacts:**
+- `api/services/policy_verifier.js`, `cron_scheduler.js`, `shc_policy_config.js`
+- `api/test/policy_verifier.test.js`, `cron_idle_checker.test.js`
+- `doc/wiki/shc-api-mvp-presence-policy-design.md` §9.3, `doc/wiki/shc-api-mvp-b-implementation.md`
+

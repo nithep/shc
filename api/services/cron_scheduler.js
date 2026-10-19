@@ -202,28 +202,32 @@ module.exports = {
 };
 
 /**
- * ── SHC API MVP (B5): Presence Idle 60s Checker ───────────────────────────────
+ * ── SHC API MVP (B5): Door Idle 60s Checker ───────────────────────────────────
  *
- * ตัวตรวจแบบ **timestamp-based** (Mnemo §9.2 ข้อ 5): cron ตื่นทุก 60 วิ แล้ว
- * คำนวณเวลาผ่าน (elapsed) จาก timestamp ที่เก็บ (last_presence_at) — ไม่ใช่นับถอยหลังรายห้อง
+ * ตัวตรวจแบบ **timestamp-based** (Mnemo §9.2 ข้อ 5 + สเปก §4): cron ตื่นทุก 60 วิ แล้ว
+ * คำนวณเวลาผ่าน (elapsed) จาก timestamp ที่เก็บ — ไม่ใช่นับถอยหลังรายห้อง
+ *
+ * ⚠️ นาฬิกา idle (§4): **idle = now − last_door_open_at** (door = พยานหลัก)
+ *    presence อย่างเดียวห้ามขับ ECO ใน MVP (ใช้เป็น occupancy เท่านั้น)
  *
  * กฎ MVP:
- *   - ตัดสินผ่าน policy verifier ก่อนทุกครั้ง (ห้ามยิงตัดไฟตรง)
- *   - **dry-run บังคับ** (config.dryRun ตลอด MVP) → ไม่ยิง eco_off จริง
+ *   - พิจารณาห้องที่ check-in (occupied) — ไม่ต้องมี presence data ก็เข้าเส้นทาง pilot §10 ได้
+ *   - ประตูเปิดค้าง > X นาที → alert พนักงาน + **ห้าม ECO** (ส่งต่อให้ policy verifier ตัดสิน)
+ *   - ตัดสินผ่าน policy verifier ก่อนทุกครั้ง (ห้ามยิงตัดไฟตรง) — ด่านกลางคืนอยู่ใน verifier
+ *   - **dry-run บังคับ** (config.dryRun ตลอด MVP) → ไม่ยิง eco_on จริง
  *   - notifier = stub (log เท่านั้น)
- *   - Dim/warn ที่ idle >= threshold - warnLead
- *   - Sleep guard 22:00–06:00
+ *   - Dim/warn ที่ door idle >= threshold - warnLead
  *
  * @param {Object} db - api/db.js
  * @param {Object} [deps] - { policyVerifier, notifier, now }
  */
 function startPresenceIdleCheck(db, deps = {}) {
-    console.log('[CRON] 🫀 Initializing presence idle 60s checker (dry-run=%s)...', config.dryRun);
+    console.log('[CRON] 🫀 Initializing door idle 60s checker (dry-run=%s)...', config.dryRun);
     return cron.schedule(config.checkerCron, async () => {
         try {
             const summary = await runPresenceIdleRound(db, deps);
             if (summary.checked > 0) {
-                console.log(`[CRON] 🫀 Idle round: checked=${summary.checked} warned=${summary.warned} ecoOff=${summary.ecoOff} denied=${summary.denied} (dryRun=${summary.dryRun})`);
+                console.log(`[CRON] 🫀 Idle round: checked=${summary.checked} warned=${summary.warned} ecoOn=${summary.ecoOn} denied=${summary.denied} doorAlerts=${summary.doorAlerts} (dryRun=${summary.dryRun})`);
             }
         } catch (e) {
             console.error('[CRON] ❌ Idle round failed:', e.message);
@@ -235,7 +239,7 @@ function startPresenceIdleCheck(db, deps = {}) {
 }
 
 /**
- * รันหนึ่งรอบของตัวตรวจ idle (แยกออกมาเพื่อ test ได้โดยไม่ต้องมี cron)
+ * รันหนึ่งรอบของตัวตรวจ door idle (แยกออกมาเพื่อ test ได้โดยไม่ต้องมี cron)
  *
  * @param {Object} db - api/db.js
  * @param {Object} [deps] - { policyVerifier, notifier, now }
@@ -250,21 +254,37 @@ async function runPresenceIdleRound(db, deps = {}) {
         db.getAllRooms((err, rows) => resolve(err ? [] : (rows || [])));
     });
 
-    const summary = { checked: 0, warned: 0, ecoOff: 0, denied: 0, skipped: 0, dryRun: config.dryRun, now: new Date(now).toISOString() };
+    const summary = { checked: 0, warned: 0, ecoOn: 0, denied: 0, doorAlerts: 0, skipped: 0, dryRun: config.dryRun, now: new Date(now).toISOString() };
 
     for (const room of rooms) {
-        // พิจารณาเฉพาะห้องที่มีแขก (occupied) และมีข้อมูล presence
-        if (room.status !== 'occupied' || !room.last_presence_at) continue;
+        // พิจารณาห้องที่มีแขก (check-in) — ไม่ต้องมี presence data (เส้นทาง pilot §10)
+        if (room.status !== 'occupied') continue;
         summary.checked++;
 
+        const doorClosed = room.door_closed === 1 || room.door_closed === true;
+        const lastDoorMs = room.last_door_open_at ? new Date(room.last_door_open_at).getTime() : null;
+
+        // ไม่มีพยานประตู → ห้ามตัดสิน ECO (presence อย่างเดียวห้ามขับ ECO)
+        if (!Number.isFinite(lastDoorMs)) { summary.skipped++; continue; }
+
         const thresholdMin = idleThresholdForRoom(room.id);
-        const idleMin = (now - new Date(room.last_presence_at).getTime()) / 60000;
-        if (!Number.isFinite(idleMin)) continue;
+        const idleMin = (now - lastDoorMs) / 60000;
+
+        // ── ประตูเปิดค้าง > X นาที → alert + ห้าม ECO (ด่านความปลอดภัย) ─────────
+        if (!doorClosed && idleMin > config.doorSensorTimeoutMin) {
+            summary.doorAlerts++;
+            console.log(`[CRON] 🚨 Room ${room.id}: door open ${idleMin.toFixed(1)} min > X=${config.doorSensorTimeoutMin} — alert, no ECO`);
+            if (notifier && typeof notifier.sendSystemAlert === 'function') {
+                notifier.sendSystemAlert('Door Open Too Long', `ห้อง ${room.id} ประตูเปิดค้าง ${idleMin.toFixed(1)} นาที — กรุณาตรวจสอบ`, true);
+            }
+            summary.denied++;
+            continue;
+        }
 
         // ── Dim/warn lead ──────────────────────────────────────────────────────
         if (idleMin >= (thresholdMin - config.warnLeadMin) && idleMin < thresholdMin && !room.warned) {
             summary.warned++;
-            console.log(`[CRON] ⚠️  Room ${room.id} idle ${idleMin.toFixed(1)}/${thresholdMin} min — dim/warn (stub)`);
+            console.log(`[CRON] ⚠️  Room ${room.id} door idle ${idleMin.toFixed(1)}/${thresholdMin} min — dim/warn (stub)`);
             db.db.run('UPDATE rooms SET warned = 1 WHERE id = ?', [String(room.id)], () => {});
             if (notifier && typeof notifier.sendSystemAlert === 'function') {
                 notifier.sendSystemAlert('Idle Warn', `ห้อง ${room.id} ใกล้ idle ${thresholdMin} นาที`, false);
@@ -272,24 +292,24 @@ async function runPresenceIdleRound(db, deps = {}) {
             continue;
         }
 
-        // ── ถึง idle threshold → propose eco_off ผ่าน policy verifier ──────────
+        // ── ถึง door-idle threshold → propose eco_on (ตัดไฟ) ผ่าน policy verifier ─
         if (idleMin >= thresholdMin) {
             if (!policyVerifier) { summary.skipped++; continue; }
             const res = await policyVerifier.verify({
                 room: room.id,
-                command: 'eco_off',
+                command: 'eco_on',
                 context: { ...room, now },
             });
             if (res.decision === 'allow') {
-                summary.ecoOff++;
+                summary.ecoOn++;
                 if (config.dryRun) {
-                    console.log(`[CRON] 🌙 DRY-RUN: would eco_off room ${room.id} (idle ${idleMin.toFixed(1)} min)`);
+                    console.log(`[CRON] 🌙 DRY-RUN: would eco_on room ${room.id} (door idle ${idleMin.toFixed(1)} min)`);
                 } else {
-                    await policyVerifier.verifyAndExecute({ room: room.id, command: 'eco_off', context: { ...room, now } });
+                    await policyVerifier.verifyAndExecute({ room: room.id, command: 'eco_on', context: { ...room, now } });
                 }
             } else {
                 summary.denied++;
-                console.log(`[CRON] 🚫 eco_off denied room ${room.id}: ${res.rule} — ${res.reason}`);
+                console.log(`[CRON] 🚫 eco_on denied room ${room.id}: ${res.rule} — ${res.reason}`);
             }
         }
     }
