@@ -93,6 +93,8 @@ updated: "2026-08-02T01:05:39+07:00"
 - [[wiki/operational_scenarios|📘 ฉากทัศน์การปฏิบัติงานหลัก 3 รูปแบบ (Core Operational Scenarios)]]
 - [[wiki/phase2-hardware-integration|การเชื่อมต่อตู้สาขาฮาร์ดแวร์จริง (Real Hardware Integration)]]
 - [[wiki/phase6-system-blueprint|Phase 6 - System Blueprint & Architecture]]
+- [[wiki/shc-api-mvp-presence-policy-design|🧩 SHC API MVP — Presence Subscriber & Policy Verifier (Design Note, ก้อน A)]]
+- [[wiki/shc-repo-doc-rot-proposals|🧹 ข้อเสนอ Doc-Rot: License & Spec/ADR Intake (ก้อน A — เสนอเท่านั้น)]]
 - [[wiki/simulation_report|📊 รายงานผลการจำลองการติดตั้งและการทดสอบระบบ (Simulation Report)]]
 - [[wiki/solo_dev_business_strategy|กลยุทธ์การตลาดและการวางตำแหน่ง (Solo Dev Strategy)]]
 - [[wiki/squarespace-domain-verification|การยืนยันโดเมนที่จัดการโดย Squarespace (Domain Verification)]]

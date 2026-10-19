@@ -1590,3 +1590,20 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - **ข้อพึงระวังต่อ (Pending):** Backend ยังเชื่อม Public HiveMQ (fallback) จนกว่าจะเพิ่ม Secrets `MQTT_BROKER_URL/MQTT_USERNAME/MQTT_PASSWORD` ให้ตรง broker จริง (mosquitto TLS หน้างาน), Frontend workflow อาจต้องเพิ่มสิทธิ์ Firebase ให้ SA, และควรพิจารณา Workload Identity Federation แทน long-lived key ในอนาคต
 - **E2E Live Test ผ่านครบวงจร (Cloud ↔ Internet ↔ Edge):** รัน Edge Agent (`mqtt_agent.js` — ไม่ใช่ index.js ซึ่งเป็น library module เท่านั้น) โหมด Digital Twin บนเครื่อง dev ชี้ Public HiveMQ ให้ตรงกับ Cloud Run → POST `/api/guest/checkin` ห้อง 101 ได้ session `SUCCESS`, `verified=true`, `power=on` ภายใน ~1.1 วินาที และ `/api/guest/checkout` ตัดไฟ `SUCCESS verified=true` ภายใน ~1.7 วินาที — ปิด Loop: HTTPS → StateStore/SSE → MQTT Publish → Edge รับคำสั่ง → Mock PBX execute → Read-back verify → Publish state/result → Session ปิดสถานะ SUCCESS
 
+## [2026-10-20] ก้อน A — SHC API MVP Audit + Gap + Design (Presence Subscriber & Policy Verifier)
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**สรุปผลงาน:**
+- **ขั้น 0 (Working tree audit):** ตรวจ local working tree vs GitHub HEAD `5f4b383` — ตรง 100%, git status สะอาด 0 changes/0 untracked, ไม่มี commit ค้างบน `main` (พบ stash ค้าง 1 รายการ + linked worktrees 2 ตัวขึ้น `prunable` — ไม่กระทบ main)
+- **ตาราง Gap ยืนยันจากโค้ด local:** presence subscriber (ไม่มี), door events (ไม่มี), คอลัมน์ `last_door_open_at`/`door_closed`/`override_locked`/`warned` (ไม่มี), dim (ไม่มี), sleep guard แบบ policy (ไม่มี — มีแค่ `_sleep()` retry ใน StateVerifier), ตัวตรวจ 60 วิ มีเฉพาะระดับ approval gate; ยืนยัน `StateVerifier.js` เป็นชั้น hardware และ policy 5 ข้อ (สเปก §5) ต้องเป็นชั้นใหม่แยก
+- **ประเมิน `cron_scheduler.js`:** ใช้เป็นฐานได้ + timezone Asia/Bangkok + เรียกผ่าน facade; จุดเสี่ยง auto-eviction ตัดไฟจริง + ยิง notifier จริง → MVP ต้อง dry-run
+- **Design Note:** เพิ่ม `doc/wiki/shc-api-mvp-presence-policy-design.md` — presence_subscriber service ใหม่ (idle-safe, ห้ามสั่ง ECO ใน MVP), policy verifier ชั้นใหม่ห่อ hardware verifier, migration additive 4 คอลัมน์, route ใหม่ก้อน B
+- **ข้อเสนอ doc-rot (เสนอเท่านั้น):** `api/package.json` license ISC ขัด root proprietary → เสนอ UNLICENSED + `private: true`; วิธีสำเนาสเปก/ADR เข้า `doc/` (ADR → `doc/wiki/decision_records/`, สเปก → `doc/raw/`)
+- **จุดให้ Mnemo ตัดสิน 8 ข้อ:** topic namespace (hotel/ vs shc/), สเปก §5 ต้นฉบับ, รูปแบบ migration, cron base, ความหมาย "ตัวตรวจ 60 วิ", notifier จริง/stub, worktree prune, MQTT status topic mismatch (/status vs /edge/status)
+- **ข้อค้นพบเพิ่มเติม:** MQTT topic mismatch ระหว่าง cloud connector (`/status`) กับ edge agent (`/edge/status`) — เสนอส่ง DS cross-review
+
+**Artifacts:**
+- `doc/wiki/shc-api-mvp-presence-policy-design.md` (Design note, proposed)
+- รายงานส่งมอบ: `D:\Digital Second Brain\agy\2026-10-20_SHC_MVP_ก้อนA_Report.md`
+
