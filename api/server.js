@@ -2316,7 +2316,11 @@ async function startServer() {
     cronScheduler.startCronJobs(db, googleNotifier, pbx);
 
     // ─── SHC API MVP (B1/B5): presence subscriber + idle 60s checker ───────
-    presenceSubscriber.connect().catch((e) => {
+    presenceSubscriber.connect().then(() => {
+        if (presenceSubscriber.disabled) {
+            console.warn('[SHC] ⚠️ presence subscriber is DISABLED (fail-closed — check SHC_PRESENCE_MQTT_URL/USER in .env)');
+        }
+    }).catch((e) => {
         console.warn(`[SHC] ⚠️ presence subscriber connect failed: ${e.message}`);
     });
     cronScheduler.startPresenceIdleCheck(db, { policyVerifier, notifier: shcStubNotifier });

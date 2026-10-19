@@ -28,6 +28,13 @@
  *   - **ห้ามสั่ง ECO เอง**: present=false → emit event ให้ policy verifier ตัดสิน
  *   - broker ขาด: reconnect ด้วย backoff + log ลงไฟล์ (ห้าม pop-up console)
  *
+ * ความปลอดภัย (ก้อน C ขั้น 0.1):
+ *   - **fail-closed**: ถ้าไม่มี `SHC_PRESENCE_MQTT_URL`/`MQTT_BROKER_URL` → ไม่เชื่อมต่อ
+ *     (ห้าม fallback ไป broker สาธารณะ) log error ชัดเจน
+ *   - **credential แยกเฉพาะ service**: `SHC_PRESENCE_MQTT_USER`/`SHC_PRESENCE_MQTT_PASS`
+ *     (1 device/service = 1 credential) — ไม่มี credential → ปิด เว้นแต่ dev opt-in
+ *     ด้วย `SHC_PRESENCE_ALLOW_INSECURE=true`
+ *
  * @module services/presence_subscriber
  */
 
@@ -69,14 +76,27 @@ class PresenceSubscriber extends EventEmitter {
         super();
         this.db = deps.db || null;
         this.branchId = process.env.BRANCH_ID || 'branch_01';
-        this.brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com:1883';
-        this.username = process.env.MQTT_USERNAME || null;
-        this.password = process.env.MQTT_PASSWORD || null;
+
+        // ── Fail-closed broker config (ก้อน C ขั้น 0.1) ────────────────────────
+        // ห้าม fallback ไป broker สาธารณะเด็ดขาด: ถ้าไม่มี URL → ปิดการเชื่อมต่อ
+        // (production ต้องตั้งค่า explicit ใน .env เท่านั้น)
+        this.brokerUrl = (process.env.SHC_PRESENCE_MQTT_URL || process.env.MQTT_BROKER_URL || '').trim();
+
+        // ── Credential แยกเฉพาะ service (1 device/service = 1 credential) ─────
+        // ใช้ SHC_PRESENCE_MQTT_USER/PASS ของตัวเอง — ห้ามยืม credential รวมของ service อื่น
+        this.username = (process.env.SHC_PRESENCE_MQTT_USER || '').trim() || null;
+        this.password = process.env.SHC_PRESENCE_MQTT_PASS || null;
+        // dev เท่านั้น: ยอมให้เชื่อมแบบไม่ใช้ credential ได้เมื่อไฟล์ .env ระบุชัด
+        this.allowInsecure = ['1', 'true', 'yes', 'on'].includes(
+            String(process.env.SHC_PRESENCE_ALLOW_INSECURE || '').toLowerCase()
+        );
+
         this.topic = config.presenceTopicPattern;
         this.qos = config.presenceQos;
 
         this.client = null;
         this.connected = false;
+        this.disabled = false;
         this._reconnectDelayMs = 1000;
         this._reconnectMaxMs = 60000;
 
@@ -97,6 +117,22 @@ class PresenceSubscriber extends EventEmitter {
     connect() {
         if (this.client) return Promise.resolve();
 
+        // ── Fail-closed: ไม่มี broker URL → ห้ามเชื่อมต่อ (ห้าม fallback สาธารณะ) ──
+        if (!this.brokerUrl) {
+            this.disabled = true;
+            logLine('ERROR', 'presence subscriber DISABLED: no SHC_PRESENCE_MQTT_URL / MQTT_BROKER_URL configured (fail-closed, no public broker fallback)');
+            this.emit('disabled', { reason: 'no_broker_url' });
+            return Promise.resolve();
+        }
+
+        // ── เตือนเมื่อไม่มี credential (อนุญาตเฉพาะเมื่อ dev opt-in ชัดเจน) ────────
+        if (!this.username && !this.allowInsecure) {
+            this.disabled = true;
+            logLine('ERROR', 'presence subscriber DISABLED: no SHC_PRESENCE_MQTT_USER configured (set SHC_PRESENCE_ALLOW_INSECURE=true only for local dev)');
+            this.emit('disabled', { reason: 'no_credential' });
+            return Promise.resolve();
+        }
+
         return new Promise((resolve) => {
             const options = {
                 clientId: `shc-presence-sub-${this.branchId}-${Math.random().toString(16).slice(2, 10)}`,
@@ -111,7 +147,7 @@ class PresenceSubscriber extends EventEmitter {
             this.client.on('connect', () => {
                 this.connected = true;
                 this._reconnectDelayMs = 1000;
-                logLine('INFO', `connected to broker=${this.brokerUrl}`);
+                logLine('INFO', `connected to broker=${this.brokerUrl} user=${this.username || '(insecure-dev)'}`);
                 this.client.subscribe(this.topic, { qos: this.qos }, (err) => {
                     if (err) {
                         logLine('ERROR', `subscribe ${this.topic} failed: ${err.message}`);

@@ -1,0 +1,25 @@
+# ==============================================================================
+# Mosquitto ACL — Hotel ECS (Smart Check-in) / SHC API MVP (ก้อน C)
+#
+# หลักการ: 1 device/service = 1 credential + สิทธิ์น้อยที่สุด (least privilege)
+# ติดตั้งโดย: ops/mosquitto/setup-presence-acl.ps1
+# ไฟล์เป้าหมายบนเครื่อง: C:\Program Files\Mosquitto\acl
+# ==============================================================================
+
+# ─── Default deny (ไม่มี rule = ปฏิเสธ) ────────────────────────────────────────
+# Mosquitto: ถ้าตั้ง acl_file แล้ว ผู้ใช้ที่ไม่มี rule จะถูกปฏิเสธทั้งหมด
+
+# ─── SHC presence_subscriber: อ่านอย่างเดียว shc/room/+/presence ───────────────
+user shc-presence
+topic read shc/room/+/presence
+
+# ─── Edge Agent (node เซ็นเซอร์, ก้อน C ถัดไป): publish presence + อ่านคำสั่ง ───
+# (ใส่เมื่อ deploy node จริง — ยังไม่เปิดใช้ในก้อนนี้)
+# user shc-edge-302
+# topic write shc/room/302/presence
+# topic read  shc/room/302/command
+
+# ─── mqtt_connector (cloud bridge เดิม): คงสิทธิ์อ่าน/เขียน hotel/* ─────────────
+user hotel
+topic read  hotel/#
+topic write hotel/#

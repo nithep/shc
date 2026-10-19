@@ -152,9 +152,60 @@ function fakeDb() {
         const ps = new PresenceSubscriber({});
         // ใช้ broker ที่ไม่ตอบ — connect ต้อง resolve ไม่ hang/throw
         ps.brokerUrl = 'mqtt://127.0.0.1:1';
+        ps.allowInsecure = true; // dev opt-in เพื่อทดสอบ path เชื่อมต่อจริง
         await ps.connect().catch(() => {});
         assert.ok(true, 'connect ไม่ throw');
         await ps.close().catch(() => {});
+    });
+
+    console.log('\n=== B1 fail-closed (ก้อน C ขั้น 0.1) ===');
+
+    await testAsync('C1: ไม่มี broker URL → disabled + ไม่เชื่อมต่อ (ไม่ fallback สาธารณะ)', async () => {
+        const ps = new PresenceSubscriber({});
+        ps.brokerUrl = '';
+        let disabledEvent = null;
+        ps.on('disabled', (d) => { disabledEvent = d; });
+        await ps.connect();
+        assert.strictEqual(ps.disabled, true, 'ต้องถูก disable');
+        assert.strictEqual(ps.client, null, 'ต้องไม่สร้าง client');
+        assert.ok(disabledEvent, 'ต้อง emit disabled');
+        assert.strictEqual(disabledEvent.reason, 'no_broker_url');
+    });
+
+    await testAsync('C2: มี URL แต่ไม่มี credential (ไม่ opt-in) → disabled', async () => {
+        const ps = new PresenceSubscriber({});
+        ps.brokerUrl = 'mqtt://192.168.1.94:1883';
+        ps.username = null;
+        ps.allowInsecure = false;
+        await ps.connect();
+        assert.strictEqual(ps.disabled, true, 'ไม่มี credential ต้องปิด');
+        assert.strictEqual(ps.client, null);
+    });
+
+    await testAsync('C3: constructor ไม่ fallback hivemq สาธารณะ', async () => {
+        const old = { ...process.env };
+        delete process.env.SHC_PRESENCE_MQTT_URL;
+        delete process.env.MQTT_BROKER_URL;
+        const ps = new PresenceSubscriber({});
+        assert.strictEqual(ps.brokerUrl, '', 'ห้ามมี default สาธารณะ');
+        assert.ok(!/hivemq/i.test(ps.brokerUrl));
+        process.env = old;
+    });
+
+    await testAsync('C4: credential แยกเฉพาะ service (SHC_PRESENCE_MQTT_USER/PASS)', async () => {
+        const old = { ...process.env };
+        process.env.SHC_PRESENCE_MQTT_USER = 'shc-presence';
+        process.env.SHC_PRESENCE_MQTT_PASS = 'secret-pass';
+        const ps = new PresenceSubscriber({});
+        assert.strictEqual(ps.username, 'shc-presence');
+        assert.strictEqual(ps.password, 'secret-pass');
+        process.env = old;
+    });
+
+    await testAsync('C5: ไม่มี URL → ไม่ throw ตอน connect (fail-closed เงียบ)', async () => {
+        const ps = new PresenceSubscriber({});
+        ps.brokerUrl = '';
+        await assert.doesNotReject(() => ps.connect());
     });
 
     console.log(`\n${failed === 0 ? '✅' : '❌'} B1: passed=${passed} failed=${failed}\n`);

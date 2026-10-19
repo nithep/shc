@@ -3,7 +3,7 @@ title: Hotel ECS Knowledge Base Index
 type: index
 description: ดัชนีสารบัญฐานความรู้และแผนผัง Knowledge Graph ของโปรเจกต์ Hotel-ECS
 tags: [hub, documentation, architecture, okf]
-updated: "2026-08-02T01:05:39+07:00"
+updated: "2026-10-20T00:00:00+07:00"
 ---
 
 # 📚 Hotel ECS Knowledge Base Index
@@ -29,6 +29,12 @@ updated: "2026-08-02T01:05:39+07:00"
 - [[wiki/smart_checkin_qr_setup|การจัดทำ QR Code ประจำห้องพักและการเข้าถึง LINE LIFF]]
 - [[wiki/system_monitoring_guide|คู่มือการตรวจสอบสถานะระบบและตู้สาขา (System Monitoring & PBX Health Check)]]
 - [[wiki/technician_pbx_manual|🔧 คู่มือช่าง: การเชื่อมต่อตู้สาขา Phonik PBX และระบบ Webhook (Technician Manual)]]
+
+## 📐 สเปกและ Ground Truth (Specs, raw/)
+
+- [[raw/specs/shc_api_mvp_presence_policy_spec|📐 SHC API MVP — Presence/Policy Spec (§4 timestamp, §5 นโยบาย 5 ข้อ, §8 acceptance)]]
+- [[raw/specs/shc_event_contract_v0.1|📡 SHC Event Contract v0.1 — Presence (MQTT)]]
+- [[raw/hardware_specs/phonik_protocol_cch2|🔌 Phonik Protocol CCH2 (ฮาร์ดแวร์ ground-truth)]]
 
 ## 🚀 การติดตั้ง โครงสร้างพื้นฐาน และ Cloud/Edge (Infrastructure, Cloud & Edge)
 
@@ -79,6 +85,8 @@ updated: "2026-08-02T01:05:39+07:00"
 - [[wiki/google-workspace-compliance-hipaa|Google Workspace Security Compliance และ HIPAA BAA]]
 - [[wiki/google_workspace_integration|💼 คู่มือการบูรณาการระบบ Hotel-ECS ร่วมกับ Google Workspace]]
 - [[wiki/role_based_security_design|🔒 สถาปัตยกรรมการรักษาความปลอดภัยแบบอิงบทบาท (Role-Based Security Design)]]
+
+> 🔐 Mosquitto ACL setup (SHC presence, ก้อน C) — ดู `ops/mosquitto/README.md` + `ops/mosquitto/acl`
 
 ## 📅 ประวัติโครงการและคู่มืออ้างอิง (Timeline & Quick References)
 

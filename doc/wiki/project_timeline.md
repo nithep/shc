@@ -1650,3 +1650,24 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - `api/test/policy_verifier.test.js`, `cron_idle_checker.test.js`
 - `doc/wiki/shc-api-mvp-presence-policy-design.md` §9.3, `doc/wiki/shc-api-mvp-b-implementation.md`
 
+## [2026-10-20] ก้อน C ขั้น 0 — งานค้างก่อน Deploy Pi (Fail-closed + ACL + Doc-rot)
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**บริบท:** งานเตรียมก่อน deploy ลง Pi4 (ก้อน C — ยังเป็น simulator/วงแล็บ; ต่อฮาร์ดแวร์จริงเป็นคำสั่งแยก)
+
+**งาน:**
+- **fail-closed presence_subscriber:** ถ้าไม่มี `SHC_PRESENCE_MQTT_URL`/`MQTT_BROKER_URL` → ไม่เชื่อมต่อ (ห้าม fallback broker สาธารณะ) log error ชัด + `disabled` event; ไม่มี credential → ปิด เว้นแต่ dev opt-in `SHC_PRESENCE_ALLOW_INSECURE=true`
+- **credential เฉพาะ service:** `SHC_PRESENCE_MQTT_USER/PASS` (1 device/service = 1 credential) — ไม่ยืม credential รวมของ service อื่น
+- **Mosquitto ACL (ก้อน 0.2):** `ops/mosquitto/acl` (user `shc-presence` = read-only `shc/room/+/presence`) + `ops/mosquitto/setup-presence-acl.ps1` (promote password prompt, ไม่ลบ user อื่น) + `mosquitto.conf` อ้าง `acl_file`
+- **doc-rot (อนุมัติประตู 1):** `api/package.json` ISC → UNLICENSED + `private:true`; intake สเปก + event contract เข้า `doc/raw/specs/` พร้อม SHA256 ใน `MANIFEST.sha256` (verify ตรง) + อัปเดต `doc/index.md`
+
+**ผลทดสอบ:** `npm run test:shc` **40/40** ผ่าน (B2=2, B4=15, B1=14, B5=9; +fail-closed 5 เคส) + smoke ยืนยัน subscriber DISABLED ถูกต้องเมื่อไม่มี broker URL
+
+**Artifacts:**
+- `api/services/presence_subscriber.js`, `api/server.js`, `api/.env`, `.env.example`, `api/package.json`
+- `ops/mosquitto/acl`, `setup-presence-acl.ps1`, `mosquitto.conf`, `README.md`
+- `doc/raw/specs/shc_api_mvp_presence_policy_spec.md`, `doc/raw/specs/shc_event_contract_v0.1.md`, `doc/raw/MANIFEST.sha256`, `doc/index.md`
+
+> **สถานะต่อ:** ขั้น 1–3 (เตรียม Pi4 + deploy + acceptance บนเครื่องจริง) เป็น **Pi-gated** — ต้องมีผล dry-run SNC-pause ให้ห้องบัญชาการตรวจ + Mnemo อนุมัติ `--apply` ก่อน ห้าม apply จากบรีฟ
+

@@ -57,6 +57,35 @@ MQTT_TLS_REJECT_UNAUTHORIZED=false      # self-signed cert (dev/internal เท�
 Restart-Service mosquitto
 ```
 
+## 🆕 ACL + credential เฉพาะ service (SHC presence — ก้อน C)
+
+หลักการ **1 device/service = 1 credential** (least privilege): `presence_subscriber`
+ใช้ user ของตัวเอง อ่านได้เฉพาะ `shc/room/+/presence` (read-only)
+
+```powershell
+# รันแบบ Administrator — promote password prompt (ไม่ฝังรหัสในสคริปต์)
+cd <project>\ops\mosquitto
+powershell -ExecutionPolicy Bypass -File setup-presence-acl.ps1
+```
+
+สคริปต์จะ: เพิ่ม user `shc-presence` เข้า pwfile เดิม (ไม่ลบ user อื่น) → ติดตั้ง `acl` → restart service
+
+ACL (`ops/mosquitto/acl`) กำหนด:
+- `user shc-presence` → `topic read shc/room/+/presence`
+- `user hotel` → อ่าน/เขียน `hotel/#`
+- (ความเห็นไว้สำหรับ edge node จริง — ยังไม่เปิดในก้อนนี้; 1 node = 1 user)
+
+หลังติดตั้ง ตั้งค่าใน `api/.env`:
+```
+SHC_PRESENCE_MQTT_URL=mqtt://<broker-ip>:1883
+SHC_PRESENCE_MQTT_USER=shc-presence
+SHC_PRESENCE_MQTT_PASS=<รหัสที่ตั้ง>
+SHC_PRESENCE_ALLOW_INSECURE=false
+```
+
+> ⚠️ **fail-closed:** ถ้า `SHC_PRESENCE_MQTT_URL` ว่าง → `presence_subscriber` ไม่เชื่อมต่อ
+> (ห้าม fallback ไป broker สาธารณะ) — log error ชัดเจน
+
 ## 🔒 เรื่อง Certificate (สำคัญ)
 
 - `certs/server.crt` เป็น **self-signed** — เหมาะกับ dev/internal เท่านั้น
