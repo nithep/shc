@@ -90,6 +90,12 @@ function runMigrations() {
       { table: 'rooms', name: 'consent_given_at',  type: 'TEXT' },
       { table: 'rooms', name: 'consent_ip',        type: 'TEXT' },
       { table: 'rooms', name: 'checkout_date',     type: 'TEXT' },
+      // ── Migration 004: presence/door/idle policy columns (additive) ────────
+      { table: 'rooms', name: 'last_door_open_at', type: 'TEXT' },
+      { table: 'rooms', name: 'last_presence_at',  type: 'TEXT' },
+      { table: 'rooms', name: 'door_closed',       type: 'BOOLEAN NOT NULL DEFAULT 0' },
+      { table: 'rooms', name: 'override_locked',   type: 'BOOLEAN NOT NULL DEFAULT 0' },
+      { table: 'rooms', name: 'warned',            type: 'BOOLEAN NOT NULL DEFAULT 0' },
     ];
 
     alterColumns.forEach(({ table, name, type }) => {

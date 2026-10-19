@@ -1607,3 +1607,26 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - `doc/wiki/shc-api-mvp-presence-policy-design.md` (Design note, proposed)
 - รายงานส่งมอบ: `D:\Digital Second Brain\agy\2026-10-20_SHC_MVP_ก้อนA_Report.md`
 
+## [2026-10-20] ก้อน B — SHC API MVP Core Logic (Presence Subscriber & Policy Verifier)
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**ขอบเขต:** simulator เท่านั้น — **ไม่แตะ** `api/services/mqtt_connector.js` และ `pbx/safety/StateVerifier.js` (+ mirror `ops/edge-agent/safety/StateVerifier.js`) — deploy เฉพาะ Pi monolith (ห้าม `api/cloudrun/`) ตาม Mnemo §9.2
+
+**ผลงาน:**
+- **B2 Migration 004 (additive):** เพิ่ม 5 คอลัมน์เข้า `api/db.js` migration list + `api/scripts/migrate.js` — `last_door_open_at`, `last_presence_at`, `door_closed`, `override_locked`, `warned` (idempotent ผ่าน `duplicate column name` ignore)
+- **B1 `presence_subscriber.js`:** subscribe `shc/room/+/presence` QoS1 read-only (client instance แยก), parse ตาม **Event Contract v0.1** (`room_id`/`event`=entered|empty|count_changed/`persons`/`confidence`/`ts` ISO8601/`sensor_id`), persist `last_presence_at`, reconnect backoff 1s→60s, log ลง `D:\_scripts\logs\`, **ไม่ publish คำสั่งใดๆ**, กัน crash บน broker error (T6)
+- **B4 `policy_verifier.js`:** checklist 5 ข้อ §5 ตามลำดับ (override locked → VACANT→ECO illegal → idempotent skip → safety night/door-silent → relay flap <2 นาที), log ทุก denial (room/command/rule/time/reason), ห่อ hardware verifier ไม่แก้ภายใน, dry-run บังคับ
+- **B3 route ใหม่ 5 เส้น:** `/api/presence/:room`, `/api/rooms/:id/presence-history`, `POST /api/door/events`, `POST /api/rooms/override` (owner), `GET /api/policy/decisions` (owner) — ใช้ middleware เดิม (`verifyStaffToken`/`verifyOwnerToken`)
+- **B5 `startPresenceIdleCheck` + `runPresenceIdleRound`:** cron ทุก 60 วิ (timestamp-based จาก `last_presence_at`), dry-run บังคับ ไม่ยิงตัดไฟจริง, notifier = stub, dim/warn ที่ idle ≥ threshold−1, sleep guard 22:00–06:00
+- **B6 ค่า X:** **Mnemo ยืนยัน 10 นาที** (`SHC_DOOR_SENSOR_TIMEOUT_MIN`) — เหตุผล: 50% ของ idle ปกติ 20 นาที, 1/3 ของ suite 30 นาที → เซนเซอร์ตายบล็อกการตัดไฟก่อนถึงรอบตัด (fail-safe)
+- **Gate 2 (Muse + Mnemo):** ผ่านแบบมีเงื่อนไข — แก้ payload B1 ตาม event contract ก่อน commit (ทำแล้ว); suite rooms เว้นว่างจนถึง pilot; เพิ่ม `SHC_*` ใน `.env` พร้อม default; credential MQTT แยกตอน deploy ก้อน C
+- **Config:** `shc_policy_config.js` รวม threshold ทั้งหมด (ห้าม hardcode) + `SHC_*` keys ใน `.env` + `.env.example`
+
+**ทดสอบ (dependency-free, `npm run test:shc`):** 31 เคสผ่านทั้งหมด — B2 (2), B4 checklist+acceptance §8 (14), B1 contract + T6/T7 (9), B5 (6) + integration smoke กับ mock PBX (health OK, door persist, override owner OK, staff→owner 403) + ยืนยัน migration 004 applied บน hotel.db จริง (5 คอลัมน์ใหม่ครบ)
+
+**Artifacts:**
+- `api/services/shc_policy_config.js`, `presence_subscriber.js`, `policy_verifier.js`
+- `api/test/` (4 test files + run_all.js)
+- `doc/wiki/shc-api-mvp-b-implementation.md` (Implementation note)
+

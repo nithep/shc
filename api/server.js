@@ -28,6 +28,11 @@ const {
 const rateLimit = require('express-rate-limit');
 const cronScheduler = require('./services/cron_scheduler');
 
+// ─── SHC API MVP — Policy Layer (B1/B4/B5) ─────────────────────────────────
+const { PresenceSubscriber } = require('./services/presence_subscriber');
+const { PolicyVerifier, DECISION } = require('./services/policy_verifier');
+const { config: shcPolicyConfig } = require('./services/shc_policy_config');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -194,6 +199,26 @@ const rateLimiter = new RateLimiter({
 // Initialize Audit Log table
 initAuditLog(db.db);
 apiKeyService.initApiKeyDb();
+
+// ─── SHC API MVP — Policy Layer instances (B1/B4) ─────────────────────────
+// Notifier = stub (log เท่านั้น) ตลอด MVP ตาม Mnemo Decision Log §9.2 ข้อ 6
+const shcStubNotifier = {
+    sendSystemAlert: (title, message, isAlert) => {
+        console.log(`[SHC-NOTIFY-STUB] ${isAlert ? 'ALERT' : 'INFO'} ${title}: ${message}`);
+    },
+};
+
+const policyVerifier = new PolicyVerifier({
+    db,
+    pbx,
+    auditLog: { appendAuditEvent: (evt) => appendAuditEvent(db.db, evt), },
+    notifier: shcStubNotifier,
+});
+
+const presenceSubscriber = new PresenceSubscriber({ db });
+
+console.log(`[SHC] ✅ Policy Layer initialized (dryRun=${shcPolicyConfig.dryRun}, X=${shcPolicyConfig.doorSensorTimeoutMin} min)`);
+
 initPdpaConsentTable(db.db).catch(err => {
     console.error('[PDPA] ⚠️ Failed to initialize PDPA table:', err.message);
 });
@@ -940,6 +965,143 @@ app.get('/api/rooms/:id/status', verifyStaffToken, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHC API MVP — Presence / Door / Policy Routes (B3)
+// ทุก route ใหม่ผ่าน policy verifier ก่อนแตะ hardware; ห้ามคุยกับ PBX ตรง
+// ═══════════════════════════════════════════════════════════════════════════
+
+// อ่านสถานะ presence ปัจจุบันของห้อง (จาก subscriber cache + DB)
+app.get('/api/presence/:room', verifyStaffToken, (req, res) => {
+    const room = String(req.params.room);
+    const cached = presenceSubscriber.getPresence(room);
+    db.db.get(
+        'SELECT id, status, last_presence_at, last_door_open_at, door_closed, override_locked, warned FROM rooms WHERE id = ?',
+        [room],
+        (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!row) return res.status(404).json({ error: `Room ${room} not found` });
+            res.json({
+                success: true,
+                room,
+                presence: cached || null,
+                last_presence_at: row.last_presence_at || null,
+                last_door_open_at: row.last_door_open_at || null,
+                door_closed: row.door_closed === 1,
+                override_locked: row.override_locked === 1,
+                warned: row.warned === 1,
+            });
+        }
+    );
+});
+
+// ประวัติ presence/door ล่าสุดของห้อง
+app.get('/api/rooms/:id/presence-history', verifyStaffToken, (req, res) => {
+    const room = String(req.params.id);
+    db.db.all(
+        `SELECT timestamp, event_type, command_type, payload_json
+           FROM approval_audit_events
+          WHERE target_rooms LIKE ? OR payload_json LIKE ?
+          ORDER BY timestamp DESC LIMIT 50`,
+        [`["${room}"]`, `%\"room\":\"${room}\"%`],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, room, history: rows || [] });
+        }
+    );
+});
+
+// Door event (จาก Edge Agent / sensor) — บันทึกเวลาเปิดประตู + สถานะปิด
+app.post('/api/door/events', verifyStaffToken, async (req, res) => {
+    const { room, event, ts } = req.body;
+    if (!room || !event) {
+        return res.status(400).json({ error: 'room and event (open|close) are required' });
+    }
+    const roomId = String(room);
+    const eventType = String(event).toLowerCase();
+    if (!['open', 'close'].includes(eventType)) {
+        return res.status(400).json({ error: 'event must be "open" or "close"' });
+    }
+
+    const iso = new Date(Number.isFinite(ts) ? ts : Date.now()).toISOString();
+    const doorClosed = eventType === 'close' ? 1 : 0;
+
+    try {
+        if (eventType === 'open') {
+            await new Promise((resolve, reject) => {
+                db.db.run(
+                    'UPDATE rooms SET last_door_open_at = ?, door_closed = 0, warned = 0 WHERE id = ?',
+                    [iso, roomId],
+                    (err) => err ? reject(err) : resolve()
+                );
+            });
+        } else {
+            await new Promise((resolve, reject) => {
+                db.db.run(
+                    'UPDATE rooms SET door_closed = 1, warned = 0 WHERE id = ?',
+                    [roomId],
+                    (err) => err ? reject(err) : resolve()
+                );
+            });
+        }
+
+        await appendAuditEvent(db.db, {
+            eventType: 'AUTO_PASSED',
+            command: {
+                commandType: eventType === 'open' ? 'DOOR_OPEN' : 'DOOR_CLOSE',
+                targetRooms: [roomId],
+                requestedBy: 'system:door_sensor',
+                source: req.body.source || 'edge-agent',
+                dryRun: shcPolicyConfig.dryRun,
+            },
+            result: doorClosed ? 'closed' : 'open',
+        });
+
+        res.json({ success: true, room: roomId, event: eventType, at: iso });
+    } catch (err) {
+        console.error(`[API] Door event failed for Room ${roomId}:`, err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ตั้ง/ปลด override_locked (OWNER เท่านั้น + audit log)
+app.post('/api/rooms/override', verifyOwnerToken, async (req, res) => {
+    const { roomNumber, locked } = req.body;
+    if (!roomNumber || typeof locked !== 'boolean') {
+        return res.status(400).json({ error: 'roomNumber and locked (boolean) are required' });
+    }
+    const roomId = String(roomNumber);
+    try {
+        await new Promise((resolve, reject) => {
+            db.db.run(
+                'UPDATE rooms SET override_locked = ? WHERE id = ?',
+                [locked ? 1 : 0, roomId],
+                (err) => err ? reject(err) : resolve()
+            );
+        });
+        await appendAuditEvent(db.db, {
+            eventType: 'AUTO_PASSED',
+            command: {
+                commandType: 'OVERRIDE_SET',
+                targetRooms: [roomId],
+                requestedBy: req.user?.role || 'owner',
+                source: 'api:rooms/override',
+                dryRun: shcPolicyConfig.dryRun,
+            },
+            result: locked ? 'locked' : 'unlocked',
+        });
+        res.json({ success: true, room: roomId, override_locked: locked });
+    } catch (err) {
+        console.error(`[API] Override failed for Room ${roomId}:`, err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ดูผลตัดสินของ policy verifier (audit trail ในหน่วยความจำ)
+app.get('/api/policy/decisions', verifyOwnerToken, (req, res) => {
+    res.json({ success: true, dryRun: shcPolicyConfig.dryRun, decisions: policyVerifier.decisions });
+});
+
 
 // ─── Control Webhook (สำหรับ AppSheet / แอดมินบังคับเปิด-ปิด) ─────────────
 app.post('/api/rooms/control', verifyStaffToken, async (req, res) => {
@@ -2152,6 +2314,12 @@ async function startServer() {
 
     // Initialize daily reporting cronjob
     cronScheduler.startCronJobs(db, googleNotifier, pbx);
+
+    // ─── SHC API MVP (B1/B5): presence subscriber + idle 60s checker ───────
+    presenceSubscriber.connect().catch((e) => {
+        console.warn(`[SHC] ⚠️ presence subscriber connect failed: ${e.message}`);
+    });
+    cronScheduler.startPresenceIdleCheck(db, { policyVerifier, notifier: shcStubNotifier });
 
     app.listen(PORT, '0.0.0.0', () => {
         const os = require('os');

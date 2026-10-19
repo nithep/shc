@@ -13,7 +13,8 @@
     "pbx:dry-run": "node ../ops/scripts/agent_tools/pbx_dry_run.js",
     "agent:synthesis": "node ../ops/scripts/agents/synthesis_agent.js",
     "agent:verify": "node ../ops/scripts/agents/verification_agent.js",
-    "simulate": "node scripts/loop_agent.js"
+    "simulate": "node scripts/loop_agent.js",
+    "test:shc": "node test/run_all.js"
   },
   "keywords": [],
   "author": "",

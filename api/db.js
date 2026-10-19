@@ -50,7 +50,12 @@ function initDb() {
                 { name: 'guest_email', type: 'TEXT' },
                 { name: 'consent_given_at', type: 'TEXT' },
                 { name: 'consent_ip', type: 'TEXT' },
-                { name: 'checkout_date', type: 'TEXT' }
+                { name: 'checkout_date', type: 'TEXT' },
+                { name: 'last_door_open_at', type: 'TEXT' },
+                { name: 'last_presence_at', type: 'TEXT' },
+                { name: 'door_closed', type: 'BOOLEAN NOT NULL DEFAULT 0' },
+                { name: 'override_locked', type: 'BOOLEAN NOT NULL DEFAULT 0' },
+                { name: 'warned', type: 'BOOLEAN NOT NULL DEFAULT 0' }
             ];
 
             migrations.forEach(m => {

@@ -1,4 +1,5 @@
 const cron = require('node-cron');
+const { config, idleThresholdForRoom } = require('./shc_policy_config');
 
 /**
  * เริ่มต้นระบบ Cronjob เพื่อรายงานสรุปประจำวัน
@@ -195,5 +196,103 @@ async function generateAndSendReport(db, googleNotifier, pbx) {
 
 module.exports = {
     startCronJobs,
-    generateAndSendReport
+    generateAndSendReport,
+    startPresenceIdleCheck,
+    runPresenceIdleRound
 };
+
+/**
+ * ── SHC API MVP (B5): Presence Idle 60s Checker ───────────────────────────────
+ *
+ * ตัวตรวจแบบ **timestamp-based** (Mnemo §9.2 ข้อ 5): cron ตื่นทุก 60 วิ แล้ว
+ * คำนวณเวลาผ่าน (elapsed) จาก timestamp ที่เก็บ (last_presence_at) — ไม่ใช่นับถอยหลังรายห้อง
+ *
+ * กฎ MVP:
+ *   - ตัดสินผ่าน policy verifier ก่อนทุกครั้ง (ห้ามยิงตัดไฟตรง)
+ *   - **dry-run บังคับ** (config.dryRun ตลอด MVP) → ไม่ยิง eco_off จริง
+ *   - notifier = stub (log เท่านั้น)
+ *   - Dim/warn ที่ idle >= threshold - warnLead
+ *   - Sleep guard 22:00–06:00
+ *
+ * @param {Object} db - api/db.js
+ * @param {Object} [deps] - { policyVerifier, notifier, now }
+ */
+function startPresenceIdleCheck(db, deps = {}) {
+    console.log('[CRON] 🫀 Initializing presence idle 60s checker (dry-run=%s)...', config.dryRun);
+    return cron.schedule(config.checkerCron, async () => {
+        try {
+            const summary = await runPresenceIdleRound(db, deps);
+            if (summary.checked > 0) {
+                console.log(`[CRON] 🫀 Idle round: checked=${summary.checked} warned=${summary.warned} ecoOff=${summary.ecoOff} denied=${summary.denied} (dryRun=${summary.dryRun})`);
+            }
+        } catch (e) {
+            console.error('[CRON] ❌ Idle round failed:', e.message);
+        }
+    }, {
+        scheduled: true,
+        timezone: 'Asia/Bangkok',
+    });
+}
+
+/**
+ * รันหนึ่งรอบของตัวตรวจ idle (แยกออกมาเพื่อ test ได้โดยไม่ต้องมี cron)
+ *
+ * @param {Object} db - api/db.js
+ * @param {Object} [deps] - { policyVerifier, notifier, now }
+ * @returns {Promise<Object>} summary
+ */
+async function runPresenceIdleRound(db, deps = {}) {
+    const policyVerifier = deps.policyVerifier;
+    const notifier = deps.notifier || null;
+    const now = deps.now ? deps.now() : Date.now();
+
+    const rooms = await new Promise((resolve) => {
+        db.getAllRooms((err, rows) => resolve(err ? [] : (rows || [])));
+    });
+
+    const summary = { checked: 0, warned: 0, ecoOff: 0, denied: 0, skipped: 0, dryRun: config.dryRun, now: new Date(now).toISOString() };
+
+    for (const room of rooms) {
+        // พิจารณาเฉพาะห้องที่มีแขก (occupied) และมีข้อมูล presence
+        if (room.status !== 'occupied' || !room.last_presence_at) continue;
+        summary.checked++;
+
+        const thresholdMin = idleThresholdForRoom(room.id);
+        const idleMin = (now - new Date(room.last_presence_at).getTime()) / 60000;
+        if (!Number.isFinite(idleMin)) continue;
+
+        // ── Dim/warn lead ──────────────────────────────────────────────────────
+        if (idleMin >= (thresholdMin - config.warnLeadMin) && idleMin < thresholdMin && !room.warned) {
+            summary.warned++;
+            console.log(`[CRON] ⚠️  Room ${room.id} idle ${idleMin.toFixed(1)}/${thresholdMin} min — dim/warn (stub)`);
+            db.db.run('UPDATE rooms SET warned = 1 WHERE id = ?', [String(room.id)], () => {});
+            if (notifier && typeof notifier.sendSystemAlert === 'function') {
+                notifier.sendSystemAlert('Idle Warn', `ห้อง ${room.id} ใกล้ idle ${thresholdMin} นาที`, false);
+            }
+            continue;
+        }
+
+        // ── ถึง idle threshold → propose eco_off ผ่าน policy verifier ──────────
+        if (idleMin >= thresholdMin) {
+            if (!policyVerifier) { summary.skipped++; continue; }
+            const res = await policyVerifier.verify({
+                room: room.id,
+                command: 'eco_off',
+                context: { ...room, now },
+            });
+            if (res.decision === 'allow') {
+                summary.ecoOff++;
+                if (config.dryRun) {
+                    console.log(`[CRON] 🌙 DRY-RUN: would eco_off room ${room.id} (idle ${idleMin.toFixed(1)} min)`);
+                } else {
+                    await policyVerifier.verifyAndExecute({ room: room.id, command: 'eco_off', context: { ...room, now } });
+                }
+            } else {
+                summary.denied++;
+                console.log(`[CRON] 🚫 eco_off denied room ${room.id}: ${res.rule} — ${res.reason}`);
+            }
+        }
+    }
+
+    return summary;
+}
