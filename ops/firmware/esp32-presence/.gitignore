@@ -1,0 +1,11 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Host unit test binary (สร้างจาก test_ld2410_parser.cpp)
+test/test_ld2410_parser
+test/test_ld2410_parser.exe
+
+# Local hardware config (ห้าม commit credential จริง)
+include/config.h

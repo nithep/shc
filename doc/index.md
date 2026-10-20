@@ -35,6 +35,7 @@ updated: "2026-10-20T00:00:00+07:00"
 - [[raw/specs/shc_api_mvp_presence_policy_spec|📐 SHC API MVP — Presence/Policy Spec (§4 timestamp, §5 นโยบาย 5 ข้อ, §8 acceptance)]]
 - [[raw/specs/shc_event_contract_v0.1|📡 SHC Event Contract v0.1 — Presence (MQTT)]]
 - [[raw/hardware_specs/phonik_protocol_cch2|🔌 Phonik Protocol CCH2 (ฮาร์ดแวร์ ground-truth)]]
+- [[raw/hardware_specs/hlk_ld2410c_uart_protocol_v1.07|📡 HLK-LD2410C UART Protocol V1.07 (กรอบข้อมูลเซ็นเซอร์คนอยู่ — ก้อน C)]]
 
 ## 🚀 การติดตั้ง โครงสร้างพื้นฐาน และ Cloud/Edge (Infrastructure, Cloud & Edge)
 
