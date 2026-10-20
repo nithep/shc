@@ -1,0 +1,35 @@
+[Unit]
+Description=SHC API Server (Smart Hotel Check-in) — Pi4 monolith (MVP, dry-run)
+Documentation=https://github.com/nithep/shc
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ecs-agent
+Group=ecs-agent
+WorkingDirectory=/home/ecs-agent/shc/api
+EnvironmentFile=/home/ecs-agent/shc/api/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+
+# Logging → journald (dedicated tag; ห้าม pop-up console)
+SyslogIdentifier=shc-api
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits (Pi4: RAM จำกัด — SHC เป็น MVP dry-run ไม่ควรกินเยอะ)
+MemoryMax=256M
+CPUQuota=50%
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/ecs-agent/shc/api /home/ecs-agent/shc/logs
+ProtectHome=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
