@@ -8,13 +8,16 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: hotel-ecs-nithep
+  PROJECT_ID: hotel-ecs-shc
   SERVICE_NAME: hotel-ecs-backend
   REGION: asia-southeast1
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +26,8 @@ jobs:
         name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
