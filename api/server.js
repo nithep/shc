@@ -455,7 +455,7 @@ async function syncPbxStateWithDatabase() {
                 try {
                     const isOccupied = room.status === 'occupied';
                     const pbxStatus = await pbx.getRoomStatus(room.id);
-                    const isPbxOn = pbxStatus.status === 'ON';
+                    const isPbxOn = pbxStatus.statusLabel === 'ON';
 
                     if (pbx.readOnly) {
                         const dbPower = room.power === true;
