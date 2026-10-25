@@ -43,3 +43,6 @@ __pycache__/
 # Local agent tooling
 .freebuff/
 .grok/
+
+# Backups
+backup/
