@@ -56,6 +56,7 @@ const { logger } = require('./logger');
  * @property {number} [retryBaseDelay=1000] - Base delay for exponential backoff (ms)
  * @property {number} [reconnectAttempts=5] - Max auto-reconnect attempts
  * @property {number} [commandTimeout=5000] - Timeout per command (ms)
+ * @property {boolean} [readOnly=false] - Block all control frames before transport write
  */
 
 /** @type {ConnectorConfig} */
@@ -70,7 +71,16 @@ const DEFAULT_CONFIG = Object.freeze({
   retryBaseDelay: 1000,
   reconnectAttempts: 5,
   commandTimeout: 5000,
+  readOnly: false,
 });
+
+function toBoolean(value) {
+  return value === true || ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
+function normalizeFrame(command) {
+  return String(command).replace(/\r?\n/g, '');
+}
 
 // ─── Connection States ────────────────────────────────────────────────────────
 
@@ -298,6 +308,7 @@ class PbxConnector extends EventEmitter {
 
     /** @type {ConnectorConfig} */
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config.readOnly = toBoolean(this.config.readOnly);
 
     /** @type {string} */
     this._state = STATE.DISCONNECTED;
@@ -349,6 +360,14 @@ class PbxConnector extends EventEmitter {
    */
   get isReady() {
     return this._state === STATE.CONNECTED && this._transport && this._transport.isConnected();
+  }
+
+  /**
+   * Read-only mode — control frames are rejected at the connector boundary.
+   * @returns {boolean}
+   */
+  get readOnly() {
+    return this.config.readOnly === true;
   }
 
   /**
@@ -466,6 +485,7 @@ class PbxConnector extends EventEmitter {
    * // => { success: true, room: '0101', status: 'ON', name: 'John Doe' }
    */
   async checkIn(room, guestName, days = 1) {
+    this._assertWriteAllowed('checkIn');
     return this._queue.add(async () => {
       this._ensureReady();
       const normalizedRoom = protocol.normalizeRoom(room);
@@ -521,6 +541,7 @@ class PbxConnector extends EventEmitter {
    * // => { success: true, room: '0101', status: 'OFF' }
    */
   async checkOut(room) {
+    this._assertWriteAllowed('checkOut');
     return this._queue.add(async () => {
       this._ensureReady();
       const normalizedRoom = protocol.normalizeRoom(room);
@@ -621,6 +642,7 @@ class PbxConnector extends EventEmitter {
    * @returns {Promise<Object>} { room, name }
    */
   async setGuestName(room, name) {
+    this._assertWriteAllowed('setGuestName');
     return this._queue.add(async () => {
       this._ensureReady();
 
@@ -824,6 +846,8 @@ class PbxConnector extends EventEmitter {
    * @throws {Error} เมื่อล้มเหลวหลัง retry ทั้งหมด
    */
   async _sendWithRetry(command, isMultiLine = false) {
+    this._assertReadOnlyFrameAllowed(command);
+
     const maxAttempts = this.config.retryAttempts;
     const baseDelay = this.config.retryBaseDelay;
     let lastError;
@@ -1042,6 +1066,45 @@ class PbxConnector extends EventEmitter {
   }
 
   /**
+   * Reject a control operation before it reaches the command queue/socket.
+   * @private
+   * @param {string} operation
+   */
+  _assertWriteAllowed(operation) {
+    if (!this.readOnly) return;
+
+    const err = new Error(`PBX_READ_ONLY: ${operation} blocked before transport write`);
+    err.code = 'PBX_READ_ONLY';
+    err.operation = operation;
+    throw err;
+  }
+
+  /**
+   * Defense in depth: only allow known read/conversation frames in read-only mode.
+   * This runs before retry/backoff and before transport.send(), so no byte leaves the process.
+   * @private
+   * @param {string} command
+   */
+  _assertReadOnlyFrameAllowed(command) {
+    if (!this.readOnly) return;
+
+    const frame = normalizeFrame(command);
+    const allowed = new Set([
+      normalizeFrame(protocol.buildGetRoom()),
+      normalizeFrame(protocol.buildGetVersion()),
+      normalizeFrame(protocol.buildPing()),
+      normalizeFrame(protocol.buildStop()),
+    ]);
+
+    if (!allowed.has(frame)) {
+      const err = new Error(`PBX_READ_ONLY: frame blocked before transport write: ${frame}`);
+      err.code = 'PBX_READ_ONLY';
+      err.frame = frame;
+      throw err;
+    }
+  }
+
+  /**
    * ตรวจสอบว่า connector พร้อมใช้งาน.
    * @private
    * @throws {Error} ถ้ายังไม่ได้เชื่อมต่อ
@@ -1121,7 +1184,13 @@ class PbxConnector extends EventEmitter {
  * const pbx = createConnector({ mode: 'mock' });
  */
 function createConnector(config = {}) {
-  return new PbxConnector(config);
+  const merged = { ...config };
+
+  if (merged.readOnly === undefined) {
+    merged.readOnly = toBoolean(process.env.PBX_READ_ONLY);
+  }
+
+  return new PbxConnector(merged);
 }
 
 // ─── Exports ──────────────────────────────────────────────────────────────────

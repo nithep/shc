@@ -439,6 +439,9 @@ function safetyBlockStatus(safetyResult) {
 // ─── State Synchronization (Digital Twin Loop) ────────────────────────────
 async function syncPbxStateWithDatabase() {
     console.log(`[SYNC] 🔄 Starting Digital Twin State Synchronization...`);
+    if (pbx.readOnly) {
+        console.log('[SYNC][READ_ONLY] Enabled: read/compare/log only — no PBX or DB writes');
+    }
     return new Promise((resolve) => {
         db.getAllRooms(async (err, rooms) => {
             if (err) {
@@ -453,6 +456,28 @@ async function syncPbxStateWithDatabase() {
                     const isOccupied = room.status === 'occupied';
                     const pbxStatus = await pbx.getRoomStatus(room.id);
                     const isPbxOn = pbxStatus.status === 'ON';
+
+                    if (pbx.readOnly) {
+                        const dbPower = room.power === true;
+                        const match = isOccupied === isPbxOn && dbPower === isPbxOn;
+
+                        if (match) {
+                            console.log(`[SYNC][READ_ONLY] ✅ Room ${room.id}: OK (status=${room.status}, power=${room.power}, PBX=${isPbxOn ? 'ON' : 'OFF'})`);
+                        } else {
+                            console.log(`[SYNC][READ_ONLY] ⚠️ MISMATCH Room ${room.id}: DB status=${room.status}, power=${room.power}; PBX=${isPbxOn ? 'ON' : 'OFF'}`);
+                        }
+
+                        syncResults.push({
+                            room: room.id,
+                            action: match ? 'READ_ONLY_OK' : 'READ_ONLY_MISMATCH',
+                            success: true,
+                            match,
+                            db: { status: room.status, power: room.power },
+                            pbx: { status: isPbxOn ? 'ON' : 'OFF' },
+                        });
+                        continue;
+                    }
+
                     // [CRITICAL FIX] ตรวจสอบ power field ใน DB ด้วย ไม่ใช่แค่ status
                     const isPowerCorrect = room.power === isPbxOn;
 
@@ -504,6 +529,12 @@ async function syncPbxStateWithDatabase() {
                     syncResults.push({ room: room.id, action: 'SKIPPED', success: false, error: syncErr.message });
                 }
             }
+            if (pbx.readOnly) {
+                const matched = syncResults.filter(r => r.action === 'READ_ONLY_OK').length;
+                const mismatched = syncResults.filter(r => r.action === 'READ_ONLY_MISMATCH').length;
+                console.log(`[SYNC][READ_ONLY] Summary: ${matched} matched, ${mismatched} mismatched, ${syncResults.length} checked`);
+            }
+
             const failed = syncResults.filter(r => !r.success);
             if (failed.length > 0) {
                 console.error(`[SYNC] ❌ CRITICAL: ${failed.length} room(s) failed to sync:`, failed.map(r => r.room).join(', '));
@@ -2403,7 +2434,7 @@ app.use((req, res, next) => {
 async function startServer() {
     try {
         await pbx.connect();
-        console.log(`[PBX] ✅ Connected in ${PBX_MODE} mode`);
+        console.log(`[PBX] ✅ Connected in ${PBX_MODE} mode (readOnly=${pbx.readOnly})`);
         // Trigger initial sync upon cold boot
         syncPbxStateWithDatabase();
 
