@@ -91,6 +91,7 @@ const RESPONSE_TYPE = Object.freeze({
   STOP: 'STOP',
   WAKE: 'WAKE',
   LOCK: 'LOCK',
+  ACK: 'ACK',
   NACK: 'NACK',
   UNKNOWN: 'UNKNOWN',
 });
@@ -442,6 +443,13 @@ function parseResponse(rawString) {
   if (body === 'STOP') {
     result.type = RESPONSE_TYPE.STOP;
     result.value = 'STOP';
+    return result;
+  }
+
+  // ── Standalone ACKW (เช่น PWER=ALL บน state ว่าง) ──
+  if (body === 'ACKW') {
+    result.type = RESPONSE_TYPE.ACK;
+    result.value = 'ACKW';
     return result;
   }
 

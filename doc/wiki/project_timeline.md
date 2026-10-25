@@ -1671,3 +1671,31 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 
 > **สถานะต่อ:** ขั้น 1–3 (เตรียม Pi4 + deploy + acceptance บนเครื่องจริง) เป็น **Pi-gated** — ต้องมีผล dry-run SNC-pause ให้ห้องบัญชาการตรวจ + Mnemo อนุมัติ `--apply` ก่อน ห้าม apply จากบรีฟ
 
+
+## [2026-10-25] Phase 1 — StateVerifier ครอบทุก HTTP/Approval + Dry-run Precedence + ACKW
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**บริบท:** ปิดช่องโหว่ความปลอดภัย Phase 1 ข้อ 1–6 ก่อนพิจารณา deploy — ยังทำงานบน simulator/mock เท่านั้น ไม่แตะ Pi
+
+**จุดแก้:**
+- **StateVerifier ทุกเส้นทางคำสั่ง:** `/api/checkin`, `/api/checkout`, `/api/rooms/control`, `/api/rooms/guest-control`, external API และ approval execute ใช้ adapter กลาง `hardware_verification.js` ตรวจ state หลังสั่งจริง + fail-closed
+- **HTTP error mapping:** rate limit 429, state verification fail 502, approval required 202; audit `STATE_VERIFICATION_FAILED` ทุกครั้ง
+- **Approval execute:** ใช้ `resolveDryRun()` จาก server, dry-run จำลอง StateVerifier โดยไม่แตะ PBX/DB, real path อัปเดต DB เฉพาะหลัง verify ผ่าน, verify fail ไม่ mark executed
+- **Dry-run precedence:** server-side `SHC_POLICY_DRY_RUN=true` ชนะ body ทุกเส้นทาง รวม approval
+- **ACKW:** parser รองรับ standalone `ACKW`; `MockTransport` คืน `PWER=ALL` ครบ 101–106 + ACKW แม้ state ว่าง; `getRoomStatus` reject ACK ที่ไม่มี state
+- **Harness path:** `digitaltwin_looptest.js` เรียก `ops/worker/harness_loop.py` ด้วย `cwd=ops`, `execFileSync`, python ตาม platform/PYTHON
+- **Test isolation:** `api/db.js` รองรับ `DATABASE_PATH`; integration test ใช้ temp DB + fault injection ผ่าน `NODE_OPTIONS=--require` (ไม่มี hook ใน production)
+- **E2E:** กำหนด `SHC_POLICY_DRY_RUN=false` ชัดเจนใน child process เพื่อไม่ให้ `.env` บังคับ dry-run ในเทสต์
+
+**ผลทดสอบ:**
+- `node api/test/run_all.js` — ผ่านทุกไฟล์ (72 เคส)
+- `npx jest test/unit --runInBand --silent` — 28/28
+- `npx jest --runInBand --silent` — 33/33 (6 suites)
+- HTTP integration ใหม่ 11 เคส: pass/fail ของ checkin, checkout, control, approval execute + dry-run + double-execute guard
+
+**Artifacts:**
+- `api/services/hardware_verification.js` (ใหม่), `api/server.js`, `api/services/policy_verifier.js`, `api/services/shc_policy_config.js`, `api/db.js`
+- `api/test/hardware_verification.test.js`, `api/test/http_state_verification.test.js`, `api/test/fault_inject_state_mismatch.js`
+- `pbx/protocol.js`, `pbx/index.js`, `pbx/test/unit/ackw_connector.test.js`
+- `api/test/run_all.js`, `api/digitaltwin_looptest.js`, `pbx/test/e2e/flow.test.js`

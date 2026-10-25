@@ -5,7 +5,7 @@
 
 const http = require('http');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const PORT = process.env.PORT || 3000;
@@ -56,7 +56,13 @@ async function runDigitalTwinLoopTest() {
     // -------------------------------------------------------------
     console.log('📌 [STAGE 1] Testing Hardware PBX Connector & Harness Closed-Loop Loop (Python)...');
     try {
-        const pyOutput = execSync('python worker/harness_loop.py', { encoding: 'utf-8' });
+        const opsDir = path.join(__dirname, '..', 'ops');
+        const harnessPath = path.join(opsDir, 'worker', 'harness_loop.py');
+        const pythonBin = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+        const pyOutput = execFileSync(pythonBin, [harnessPath], {
+            cwd: opsDir,
+            encoding: 'utf-8',
+        });
         console.log('✅ Python Harness Execution Output Verified.');
         if (pyOutput.includes('SAFETY BLOCK')) {
             console.log('  🛡️ Safety Block System: VERIFIED (Blocked unauthorized command successfully)');

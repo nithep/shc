@@ -97,8 +97,21 @@ function idleThresholdForRoom(roomId) {
     return isSuite ? config.idleThresholdMinSuite : config.idleThresholdMinNormal;
 }
 
+/**
+ * Server-side dry-run ต้องมีอำนาจเหนือค่าที่มากับ request body เสมอ
+ * (fail-safe: ถ้า server เปิด dry-run อยู่ คำขอจะปิดไม่ได้)
+ *
+ * @param {*} requestDryRun - ค่าจาก body เช่น dryRun / dry_run
+ * @param {boolean} [serverDryRun=config.dryRun] - ค่าที่มีผลจาก environment
+ * @returns {boolean}
+ */
+function resolveDryRun(requestDryRun, serverDryRun = config.dryRun) {
+    return Boolean(serverDryRun || requestDryRun);
+}
+
 module.exports = {
     config,
     idleThresholdForRoom,
+    resolveDryRun,
     DEFAULT_DOOR_SENSOR_TIMEOUT_MIN,
 };

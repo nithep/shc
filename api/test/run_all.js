@@ -15,6 +15,11 @@ const FILES = [
     'policy_verifier.test.js',
     'presence_subscriber.test.js',
     'cron_idle_checker.test.js',
+    'policy_state_verifier.test.js',
+    'dry_run_precedence.test.js',
+    'digitaltwin_harness_path.test.js',
+    'hardware_verification.test.js',
+    'http_state_verification.test.js',
 ];
 
 let failed = 0;

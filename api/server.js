@@ -31,7 +31,9 @@ const cronScheduler = require('./services/cron_scheduler');
 // ─── SHC API MVP — Policy Layer (B1/B4/B5) ─────────────────────────────────
 const { PresenceSubscriber } = require('./services/presence_subscriber');
 const { PolicyVerifier, DECISION } = require('./services/policy_verifier');
-const { config: shcPolicyConfig } = require('./services/shc_policy_config');
+const { config: shcPolicyConfig, resolveDryRun } = require('./services/shc_policy_config');
+const { executeAndVerify } = require('./services/hardware_verification');
+const StateVerifier = require('../pbx/safety/StateVerifier');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -208,9 +210,12 @@ const shcStubNotifier = {
     },
 };
 
+const hardwareVerifier = new StateVerifier();
+
 const policyVerifier = new PolicyVerifier({
     db,
     pbx,
+    hardwareVerifier,
     auditLog: { appendAuditEvent: (evt) => appendAuditEvent(db.db, evt), },
     notifier: shcStubNotifier,
 });
@@ -280,7 +285,7 @@ function buildCommand(commandType, roomNumber, options = {}) {
         targetRooms,
         requestedBy: options.requestedBy || 'user:frontend',
         source: options.source || 'unknown',
-        dryRun: options.dryRun || false,
+        dryRun: resolveDryRun(options.dryRun),
         executionMode: PBX_MODE,
         guestName: options.guestName || null,
         metadata: {
@@ -345,11 +350,23 @@ async function executeWithSafety(command, executeFn) {
         command: { ...command, riskCode: null },
     });
 
-    // 4. If dryRun, skip rate limiter record and physical execute
+    // 4. If dryRun, simulate state verification without touching PBX
     if (command.dryRun) {
+        const outcome = await executeCommandWithStateVerification(command, null, true);
+        if (!outcome.success) {
+            await auditStateVerificationFailure(command, outcome);
+            return {
+                blocked: true,
+                reason: 'STATE_VERIFICATION_FAILED',
+                message: `ตรวจสอบสถานะจำลองไม่ผ่าน: ${outcome.reason}`,
+                verification: outcome.verification,
+            };
+        }
+
         return {
             blocked: false,
             dryRun: true,
+            verification: outcome.verification,
             result: { success: true, status: 'DRY_RUN_PASSED', message: 'คำสั่งผ่านการตรวจสอบความปลอดภัยเรียบร้อยแล้ว (ไม่ได้ยิงจริง)' }
         };
     }
@@ -360,9 +377,63 @@ async function executeWithSafety(command, executeFn) {
         rateLimiter.record(room, now);
     }
 
-    // 6. Execute
-    const result = await executeFn();
-    return { blocked: false, result };
+    // 6. Execute + StateVerifier (fail closed on mismatch)
+    const outcome = await executeCommandWithStateVerification(command, executeFn, false);
+    if (!outcome.success) {
+        await auditStateVerificationFailure(command, outcome);
+        return {
+            blocked: true,
+            reason: 'STATE_VERIFICATION_FAILED',
+            message: `ตรวจสอบสถานะหลังสั่งไม่ผ่าน: ${outcome.reason}`,
+            verification: outcome.verification,
+        };
+    }
+
+    return { blocked: false, result: outcome.result, verification: outcome.verification };
+}
+
+// ─── Helper: Hardware state verification for HTTP command routes ───────────
+async function executeCommandWithStateVerification(command, executeFn, simulate) {
+    const rooms = (command.targetRooms || []).filter(room => room !== '*');
+
+    if (rooms.length !== 1) {
+        return {
+            success: false,
+            simulated: !!simulate,
+            reason: 'state verification requires exactly one target room',
+            verification: null,
+            result: null,
+        };
+    }
+
+    return executeAndVerify({
+        hardwareVerifier,
+        pbx,
+        room: rooms[0],
+        commandType: command.commandType,
+        action: command.commandType,
+        executeFn,
+        simulate: !!simulate,
+    });
+}
+
+async function auditStateVerificationFailure(command, outcome) {
+    await appendAuditEvent(db.db, {
+        traceId: command.traceId,
+        eventType: 'STATE_VERIFICATION_FAILED',
+        command,
+        simulated: !!outcome.simulated,
+        reason: outcome.reason,
+        verification: outcome.verification || null,
+    }).catch(err => {
+        console.error('[AUDIT] Failed to log STATE_VERIFICATION_FAILED:', err.message);
+    });
+}
+
+function safetyBlockStatus(safetyResult) {
+    if (safetyResult.reason === 'RATE_LIMITED') return 429;
+    if (safetyResult.reason === 'STATE_VERIFICATION_FAILED') return 502;
+    return 202;
 }
 
 // ─── State Synchronization (Digital Twin Loop) ────────────────────────────
@@ -648,12 +719,14 @@ app.post('/api/bookings/bind', (req, res) => {
 // ─── Check-in (ผ่าน Safety Pipeline) ──────────────────────────────────────
 app.post('/api/checkin', async (req, res) => {
     const { roomNumber, guestName, guestEmail, dryRun, dry_run, days, pdpaConsent } = req.body;
+    const requestDryRun = Boolean(dryRun || dry_run);
+    const effectiveDryRun = resolveDryRun(requestDryRun);
     
     if (!roomNumber) {
         return res.status(400).json({ error: 'roomNumber is required' });
     }
 
-    if (!dryRun && !dry_run) {
+    if (!effectiveDryRun) {
         // Validate PDPA consent for production check-in
         if (!pdpaConsent) {
             return res.status(403).json({ 
@@ -679,13 +752,13 @@ app.post('/api/checkin', async (req, res) => {
         }
     }
 
-    console.log(`[API] Received Check-in Request for Room: ${roomNumber} (Dry-run: ${Boolean(dryRun || dry_run)})`);
+    console.log(`[API] Received Check-in Request for Room: ${roomNumber} (Dry-run: ${effectiveDryRun})`);
 
     const command = buildCommand('ROOM_ON', roomNumber, {
         source: 'checkin_flow',
         flow: 'checkin',
         guestName,
-        dryRun: Boolean(dryRun || dry_run),
+        dryRun: requestDryRun,
     });
 
     try {
@@ -696,7 +769,7 @@ app.post('/api/checkin', async (req, res) => {
         });
 
         if (safetyResult.blocked) {
-            const statusCode = safetyResult.reason === 'RATE_LIMITED' ? 429 : 202;
+            const statusCode = safetyBlockStatus(safetyResult);
             return res.status(statusCode).json(safetyResult);
         }
 
@@ -824,6 +897,8 @@ app.post('/api/rooms/:id/extend', verifyStaffToken, async (req, res) => {
 // ─── Check-out (ผ่าน Safety Pipeline) ─────────────────────────────────────
 app.post('/api/checkout', async (req, res) => {
     const { roomNumber, dryRun, dry_run } = req.body;
+    const requestDryRun = Boolean(dryRun || dry_run);
+    const effectiveDryRun = resolveDryRun(requestDryRun);
     
     if (!roomNumber) {
         return res.status(400).json({ error: 'roomNumber is required' });
@@ -851,13 +926,13 @@ app.post('/api/checkout', async (req, res) => {
         return res.status(403).json({ error: 'Invalid or expired token for check-out' });
     }
 
-    console.log(`[API] Received Check-out Request for Room: ${roomNumber} (Dry-run: ${Boolean(dryRun || dry_run)})`);
+    console.log(`[API] Received Check-out Request for Room: ${roomNumber} (Dry-run: ${effectiveDryRun})`);
 
     const command = buildCommand('ROOM_OFF', roomNumber, {
         source: req.user.role === 'guest' ? 'guest_portal' : 'checkout_flow',
         flow: 'checkout',
         requestedBy: req.user.role === 'guest' ? `guest:room_${roomNumber}` : `staff:${req.user.role}`,
-        dryRun: Boolean(dryRun || dry_run),
+        dryRun: requestDryRun,
     });
 
     try {
@@ -867,7 +942,7 @@ app.post('/api/checkout', async (req, res) => {
         });
 
         if (safetyResult.blocked) {
-            const statusCode = safetyResult.reason === 'RATE_LIMITED' ? 429 : 202;
+            const statusCode = safetyBlockStatus(safetyResult);
             return res.status(statusCode).json(safetyResult);
         }
 
@@ -926,7 +1001,7 @@ app.post('/api/rooms/guest-control', verifyGuestToken, async (req, res) => {
         });
         
         if (safetyResult.blocked) {
-            const statusCode = safetyResult.reason === 'RATE_LIMITED' ? 429 : 202;
+            const statusCode = safetyBlockStatus(safetyResult);
             return res.status(statusCode).json(safetyResult);
         }
         
@@ -1106,6 +1181,7 @@ app.get('/api/policy/decisions', verifyOwnerToken, (req, res) => {
 // ─── Control Webhook (สำหรับ AppSheet / แอดมินบังคับเปิด-ปิด) ─────────────
 app.post('/api/rooms/control', verifyStaffToken, async (req, res) => {
     const { roomNumber, action, source, dryRun } = req.body;
+    const effectiveDryRun = resolveDryRun(Boolean(dryRun));
     
     if (!roomNumber || !action) {
         return res.status(400).json({ error: 'roomNumber and action (ON/OFF) are required' });
@@ -1114,7 +1190,7 @@ app.post('/api/rooms/control', verifyStaffToken, async (req, res) => {
     const commandType = action.toUpperCase() === 'ON' ? 'ROOM_ON' : 'ROOM_OFF';
     const reqSource = source || 'appsheet_webhook';
 
-    console.log(`[API] Received Control Webhook for Room: ${roomNumber} -> ${action} (Source: ${reqSource})`);
+    console.log(`[API] Received Control Webhook for Room: ${roomNumber} -> ${action} (Source: ${reqSource}, Dry-run: ${effectiveDryRun})`);
 
     const command = buildCommand(commandType, roomNumber, {
         source: reqSource,
@@ -1132,7 +1208,7 @@ app.post('/api/rooms/control', verifyStaffToken, async (req, res) => {
         });
 
         if (safetyResult.blocked) {
-            const statusCode = safetyResult.reason === 'RATE_LIMITED' ? 429 : 202;
+            const statusCode = safetyBlockStatus(safetyResult);
             return res.status(statusCode).json(safetyResult);
         }
 
@@ -1222,7 +1298,7 @@ app.post('/api/v1/external/checkin', externalApiLimiter, (req, res) => {
             });
 
             if (safetyResult.blocked) {
-                const statusCode = safetyResult.reason === 'RATE_LIMITED' ? 429 : 202;
+                const statusCode = safetyBlockStatus(safetyResult);
                 return res.status(statusCode).json(safetyResult);
             }
 
@@ -1310,7 +1386,7 @@ app.post('/api/v1/external/checkout', externalApiLimiter, (req, res) => {
             });
 
             if (safetyResult.blocked) {
-                const statusCode = safetyResult.reason === 'RATE_LIMITED' ? 429 : 202;
+                const statusCode = safetyBlockStatus(safetyResult);
                 return res.status(statusCode).json(safetyResult);
             }
 
@@ -1697,29 +1773,69 @@ app.post('/api/admin/approval/:id/execute', verifyStaffToken, async (req, res) =
     try {
         const record = gate.consumeApproved(req.params.id);
         const command = record.command;
+        const effectiveDryRun = resolveDryRun(Boolean(command.dryRun));
+        const rooms = (command.targetRooms || []).filter(room => room !== '*');
 
-        // Rate Limiter check อีกรอบก่อนยิงจริง
-        for (const room of command.targetRooms) {
-            if (room === '*') continue;
-            const rateResult = rateLimiter.check(room);
-            if (!rateResult.allowed) {
-                return res.status(429).json({
-                    error: `ห้อง ${room} ส่งคำสั่งเกินขีดจำกัด`,
-                    resetAt: rateResult.resetAt,
-                });
+        if (rooms.length === 0) {
+            return res.status(400).json({ error: 'No executable target rooms' });
+        }
+
+        // Rate Limiter check อีกรอบก่อนยิงจริง (dry-run ไม่กิน quota)
+        if (!effectiveDryRun) {
+            for (const room of rooms) {
+                const rateResult = rateLimiter.check(room);
+                if (!rateResult.allowed) {
+                    return res.status(429).json({
+                        error: `ห้อง ${room} ส่งคำสั่งเกินขีดจำกัด`,
+                        resetAt: rateResult.resetAt,
+                    });
+                }
             }
         }
 
-        // Execute PBX command
-        let hardwareResult;
-        if (command.commandType === 'ROOM_ON' || command.commandType === 'ALL_ROOM_ON') {
-            for (const room of command.targetRooms) {
-                hardwareResult = await pbx.checkIn(room, command.guestName);
-                rateLimiter.record(room);
-                
-                // Update SQLite Database
+        const isOnCommand = command.commandType === 'ROOM_ON' || command.commandType === 'ALL_ROOM_ON';
+        const isOffCommand = command.commandType === 'ROOM_OFF' || command.commandType === 'ALL_ROOM_OFF';
+        const results = [];
+
+        for (const room of rooms) {
+            const outcome = await executeAndVerify({
+                hardwareVerifier,
+                pbx,
+                room,
+                commandType: command.commandType,
+                action: command.commandType,
+                simulate: effectiveDryRun,
+                executeFn: async () => (isOnCommand
+                    ? pbx.checkIn(room, command.guestName)
+                    : pbx.checkOut(room)),
+            });
+
+            if (!outcome.success) {
+                await auditStateVerificationFailure(command, outcome);
+                return res.status(502).json({
+                    success: false,
+                    error: 'STATE_VERIFICATION_FAILED',
+                    message: `ตรวจสอบสถานะหลังสั่งไม่ผ่าน: ${outcome.reason}`,
+                    trace_id: command.traceId,
+                    dry_run: effectiveDryRun,
+                    verification: outcome.verification,
+                });
+            }
+
+            results.push({ room, result: outcome.result, verification: outcome.verification });
+
+            if (effectiveDryRun) {
+                continue;
+            }
+
+            rateLimiter.record(room);
+
+            // Update SQLite Database เฉพาะเมื่อ StateVerifier ผ่านแล้ว
+            if (isOnCommand || isOffCommand) {
+                const status = isOnCommand ? 'occupied' : 'vacant';
+                const power = isOnCommand;
                 await new Promise((resolve, reject) => {
-                    db.updateRoomState(room, 'occupied', true, (err) => {
+                    db.updateRoomState(room, status, power, (err) => {
                         if (err) {
                             console.error(`[DB] Failed to update room ${room} state on approval execute:`, err.message);
                             reject(err);
@@ -1729,26 +1845,9 @@ app.post('/api/admin/approval/:id/execute', verifyStaffToken, async (req, res) =
                     });
                 });
             }
-        } else if (command.commandType === 'ROOM_OFF' || command.commandType === 'ALL_ROOM_OFF') {
-            for (const room of command.targetRooms) {
-                hardwareResult = await pbx.checkOut(room);
-                rateLimiter.record(room);
-                
-                // Update SQLite Database
-                await new Promise((resolve, reject) => {
-                    db.updateRoomState(room, 'vacant', false, (err) => {
-                        if (err) {
-                            console.error(`[DB] Failed to update room ${room} state on approval execute:`, err.message);
-                            reject(err);
-                        } else {
-                            resolve();
-                        }
-                    });
-                });
-            }
         }
 
-        // Mark as executed
+        // Mark as executed (ทั้งกรณีจำลองและจริง)
         gate.markExecuted(req.params.id);
 
         // Log execution
@@ -1762,14 +1861,20 @@ app.post('/api/admin/approval/:id/execute', verifyStaffToken, async (req, res) =
                 executed_at: new Date().toISOString(),
                 expired: false,
             },
-            result: { hardware: hardwareResult },
+            result: {
+                dryRun: effectiveDryRun,
+                hardware: results.length === 1 ? results[0].result : results,
+                verification: results.length === 1 ? results[0].verification : results.map(r => r.verification),
+            },
         });
 
         res.json({
             success: true,
-            message: 'คำสั่งถูกดำเนินการแล้ว',
+            message: effectiveDryRun ? 'คำสั่งถูกจำลองแล้ว (dry-run)' : 'คำสั่งถูกดำเนินการแล้ว',
             trace_id: command.traceId,
-            hardware_status: hardwareResult,
+            dry_run: effectiveDryRun,
+            hardware_status: results.length === 1 ? results[0].result : results,
+            state_verification: results.length === 1 ? results[0].verification : results.map(r => r.verification),
         });
     } catch (err) {
         // ถ้า approval หมดอายุ → log EXPIRED

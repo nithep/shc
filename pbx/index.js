@@ -196,13 +196,18 @@ class MockTransport extends EventEmitter {
 
     // ── PWER=ALL (Read-back verification, multi-line) ──
     if (cmd === '..PWER=ALL') {
+      // ต้องคืนสถานะครบทุกห้องจริงของโรงแรมเสมอ แม้ state ภายในยังว่าง
+      const rooms = new Set(['101', '102', '103', '104', '105', '106']);
+      for (const room of this._rooms.keys()) rooms.add(room);
+
       const lines = [];
-      for (const [room, roomData] of this._rooms.entries()) {
+      for (const room of rooms) {
+        const roomData = this._rooms.get(room) || { status: protocol.ROOM_STATUS.OFF };
         const statusStr = roomData.status === protocol.ROOM_STATUS.ON ? 'on' : 'off';
         lines.push(`==PWER${room}=${statusStr}`);
       }
       lines.push('==ACKW');
-      return lines.join(protocol.TERMINATOR);
+      return lines.join(protocol.TERMINATOR) + protocol.TERMINATOR;
     }
 
     // ── NAME commands ──
@@ -589,6 +594,8 @@ class PbxConnector extends EventEmitter {
         const pState = parsed.rooms[cleanRoom];
         statusCode = pState === 'ON' ? protocol.ROOM_STATUS.ON : protocol.ROOM_STATUS.OFF;
         statusLabel = pState;
+      } else if (parsed.type === protocol.RESPONSE_TYPE.ACK) {
+        throw new Error(`Get room status failed for ${normalizedRoom}: PBX returned ACK without room state`);
       } else if (parsed.type === protocol.RESPONSE_TYPE.POWER) {
         statusCode = parsed.value === 'on' ? protocol.ROOM_STATUS.ON : protocol.ROOM_STATUS.OFF;
         statusLabel = protocol.ROOM_STATUS_LABEL[statusCode] || 'UNKNOWN';

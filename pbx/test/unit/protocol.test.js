@@ -95,6 +95,20 @@ describe('Phonik PBX Protocol Engine', () => {
       expect(parsed.rooms).toEqual({ '101': 'ON', '102': 'OFF' });
     });
 
+    test('ควร parse ACKW เดี่ยว (PWER=ALL บน state ว่าง) โดยไม่เป็น error', () => {
+      const parsed = protocol.parseResponse('==ACKW\r\n');
+      expect(parsed.type).toBe(protocol.RESPONSE_TYPE.ACK);
+      expect(parsed.value).toBe('ACKW');
+      expect(parsed.error).toBe(false);
+    });
+
+    test('ควร parse Frame จริงของ PWER=ALL ที่มี ACKW ปิดท้าย', () => {
+      const parsed = protocol.parseResponse('==PWER101=on\r\n==PWER102=off\r\n==ACKW\r\n');
+      expect(parsed.type).toBe(protocol.RESPONSE_TYPE.POWER);
+      expect(parsed.rooms).toEqual({ '101': 'ON', '102': 'OFF' });
+      expect(parsed.error).toBe(false);
+    });
+
     test('ควร parse Multi-line RDSS=ALL response ได้ถูกต้อง', () => {
       const multiRdss = '==RDSS1001=0\r\n==RDSS1017=1\r\n==ACKW\r\n';
       const parsed = protocol.parseResponse(multiRdss);

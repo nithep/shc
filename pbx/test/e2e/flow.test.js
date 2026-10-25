@@ -34,7 +34,8 @@ describe('E2E Full Flow Test (API → PBX Simulator)', () => {
           PBX_MODE: 'tcp',
           PBX_PORT: PBX_PORT,
           PBX_HOST: '127.0.0.1',
-          ENFORCE_SCHEDULE: 'false'
+          ENFORCE_SCHEDULE: 'false',
+          SHC_POLICY_DRY_RUN: 'false'
         }
       });
 

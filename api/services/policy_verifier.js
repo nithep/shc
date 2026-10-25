@@ -39,6 +39,7 @@
 const fs = require('fs');
 const path = require('path');
 const { config, idleThresholdForRoom } = require('./shc_policy_config');
+const { executeAndVerify } = require('./hardware_verification');
 
 // ─── Result types ──────────────────────────────────────────────────────────────
 
@@ -280,23 +281,33 @@ class PolicyVerifier {
             return { ...result, executed: false, dryRun: false, hardwareResult: null, note: 'no pbx wired' };
         }
 
-        try {
-            let hardwareResult;
-            if (this.hardwareVerifier && typeof this.hardwareVerifier.verify === 'function') {
-                hardwareResult = await this.hardwareVerifier.verify(req.room, req.command);
-            } else if (req.command === COMMAND.ECO_ON) {
-                // eco_on = ตัดไฟ → pbx.checkOut
-                hardwareResult = await this.pbx.checkOut(req.room);
-            } else if (req.command === COMMAND.ECO_OFF) {
-                // eco_off = คืนไฟ → pbx.checkIn
-                hardwareResult = await this.pbx.checkIn(req.room);
-            }
-            this._lastRelayAt.set(String(req.room), this.now());
-            return { ...result, executed: true, dryRun: false, hardwareResult };
-        } catch (e) {
-            console.log(`[policy_verifier] hardware execute failed room=${req.room}: ${e.message}`);
-            return { ...result, decision: DECISION.DENY, executed: false, dryRun: false, reason: `hardware error: ${e.message}` };
+        const isEcoOn = req.command === COMMAND.ECO_ON;
+
+        const outcome = await executeAndVerify({
+            hardwareVerifier: this.hardwareVerifier,
+            pbx: this.pbx,
+            room: req.room,
+            commandType: req.command,
+            action: isEcoOn ? 'ROOM_OFF' : 'ROOM_ON',
+            executeFn: async () => (isEcoOn
+                ? this.pbx.checkOut(req.room)
+                : this.pbx.checkIn(req.room)),
+        });
+
+        if (!outcome.success) {
+            console.log(`[policy_verifier] hardware verification failed room=${req.room}: ${outcome.reason}`);
+            return {
+                ...result,
+                decision: DECISION.DENY,
+                executed: false,
+                dryRun: false,
+                hardwareResult: outcome.verification,
+                reason: `hardware verification failed: ${outcome.reason}`,
+            };
         }
+
+        this._lastRelayAt.set(String(req.room), this.now());
+        return { ...result, executed: true, dryRun: false, hardwareResult: outcome.verification };
     }
 
     /**
