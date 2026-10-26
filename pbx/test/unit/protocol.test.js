@@ -40,6 +40,11 @@ describe('Phonik PBX Protocol Engine', () => {
       expect(protocol.buildSetName(101, 'A'.repeat(20))).toBe(`..ROOM1017=${'A'.repeat(16)}\r\n`);
     });
 
+    test('buildSetName rejects empty and whitespace-only names', () => {
+      expect(() => protocol.buildSetName(101, '')).toThrow('Guest name is required');
+      expect(() => protocol.buildSetName(101, '   ')).toThrow('Guest name must contain at least one printable character');
+    });
+
     test('ควรสร้างคำสั่ง Get Version', () => {
       expect(protocol.buildGetVersion()).toBe('..VERS=\r\n');
     });

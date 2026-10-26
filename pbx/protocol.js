@@ -150,14 +150,14 @@ function validateStatus(status) {
  * @returns {string} Sanitized name (max 16 chars, ASCII-safe)
  * @throws {Error} ถ้า name ว่าง
  */
-function sanitizeName(name, room = '') {
+function sanitizeName(name) {
   if (!name || typeof name !== 'string') {
     throw new Error('Guest name is required and must be a string');
   }
   // Trim and strip non-printable ASCII characters (keep space and standard ASCII)
-  let cleanName = name.replace(/[^\x20-\x7E]/g, '').trim();
+  const cleanName = name.replace(/[^\x20-\x7E]/g, '').trim();
   if (!cleanName) {
-    cleanName = room ? `Guest ${room}` : 'Guest';
+    throw new Error('Guest name must contain at least one printable character');
   }
   return cleanName.substring(0, MAX_NAME_LENGTH);
 }
@@ -240,7 +240,7 @@ function buildGetRoom(room) {
  */
 function buildSetName(room, name) {
   const ext = getExtensionForRoom(room);
-  const safeName = sanitizeName(name, ext);
+  const safeName = sanitizeName(name);
   return `${CMD_PREFIX}ROOM${ext}=${safeName}${TERMINATOR}`;
 }
 

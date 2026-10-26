@@ -1724,3 +1724,53 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - `doc/wiki/pbx_initial_connect_resilience.md` (ใหม่), `doc/index.md`, `doc/log.md`
 
 > **สถานะต่อ:** ยังคง `PBX_MODE=mock` และ `SHC_POLICY_DRY_RUN=true` บน Pi จนห้องบัญชาการอนุมัติขั้นที่ 3; ไม่แตะ cctv-gateway/SNC
+
+
+## [2026-10-26] Phase 3 Live Test Room 101 — STOPPED at 2/10 (Unexpected ROOM frame)
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**บริบท:** เปิดหน้าต่างเขียนบน Pi4 ตามคำสั่งห้องบัญชาการ เพื่อทดสอบห้อง 101 จำนวน 10 transitions ภายใต้เงื่อนไขหยุดที่กำหนด
+
+**เหตุการณ์:**
+- Transition 1/10 ON สำเร็จ: API/approval/execute ผ่าน, StateVerifier attempts=1, PBX read-back ON, DB occupied/power=1
+- Transition 2/10 OFF สำเร็จ: API/approval/execute ผ่าน, StateVerifier attempts=1, PBX read-back OFF, DB vacant/power=0
+- หยุดก่อน transition 3/10 เมื่อ `pbx.checkOut()` ส่ง `..ROOM1017=Guest 1017` ซึ่งเป็นเฟรมชนิด ROOM และอยู่นอกเงื่อนไขที่อนุญาต
+- PBX ตอบ `==NACK=>ROOM1017=Guest 1017`; ไม่มีการเปลี่ยนชื่อแขกบนตู้
+- ปิดหน้าต่างเขียนและคืนค่า `PBX_READ_ONLY=true`, `SHC_POLICY_DRY_RUN=true` เรียบร้อย
+- Sync หลังปิด: 6 matched, 0 mismatched; cctv-gateway PID 1070 และ SNC ยังทำงานปกติ
+
+**Root cause:** `checkOut()` เรียก `buildSetName(room, ' ')`; `buildSetName()` สร้าง `..ROOM{ext}=` และ `sanitizeName()` fallback เป็น `Guest ${ext}` เมื่อชื่อว่าง
+
+**Follow-up:** ห้ามทดสอบต่อจนกว่าจะแก้โค้ดและมี unit test ครอบคลุม; ต้องขออนุมัติใหม่ก่อนเปิดหน้าต่างเขียนรอบถัดไป
+
+**Artifacts:**
+- `doc/wiki/phase3-live-test-room101-stop.md`
+- `/home/ecs-agent/backup/phase3_20261026_135029/` (pcap, transitions, env/health/sync, SHA-256)
+
+> **สถานะ ณ หยุด:** DB hash เปลี่ยนจาก `1df90016...` เป็น `9db800af...`; audit events 6–11; ห้อง 101 กลับเป็น `vacant/power=0`
+
+## [2026-10-26] Phase 3 Fix — Checkout Name-Frame Regression
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**บริบท:** แก้ regression จาก Phase 3 ที่ checkout สร้างเฟรมชื่อปลอม `Guest ${ext}` ทำให้ PBX ตอบ NACK งานนี้ทำใน local repo เท่านั้น ยังไม่แตะ Pi
+
+**จุดแก้:**
+- `checkOut()` ไม่ส่งเฟรมชื่อหรือเฟรม ROOM อีกต่อไป; OFF ปกติเหลือเฉพาะ `..PWER101=0`
+- `checkIn()` ส่งเฟรมชื่อเฉพาะเมื่อชื่อเป็น string ที่ไม่ว่างหลัง trim; ชื่อว่าง/ช่องว่างส่งเฉพาะ `..PWER101=1`
+- `setGuestName()` ตรวจชื่อก่อนเข้า queue; ชื่อว่าง/ช่องว่าง reject ด้วย `Guest name must contain at least one printable character` และ zero frames
+- `sanitizeName()` ไม่ fallback เป็น `Guest ${ext}`; `buildSetName()` reject ชื่อว่าง
+- ไม่สร้างเฟรมล้างชื่อใหม่; การล้างชื่อบน PBX ต้องรอหลักฐานยืนยันจากตู้จริงก่อน
+
+**ผลทดสอบ:**
+- `npx jest --runInBand` ใน `pbx/` — 8 suites, 42/42 tests
+- `npm run test:shc` ใน `api/` — ผ่านทุกไฟล์
+- ชุดใหม่ `pbx/test/unit/checkout_name_frames.test.js` ใช้ recording fake transport และปิด heartbeat; ผ่าน 4/4 กรณีตามข้อกำหนด
+
+**Artifacts:**
+- `pbx/index.js`, `pbx/protocol.js`
+- `pbx/test/unit/checkout_name_frames.test.js` (ใหม่), `pbx/test/unit/protocol.test.js`
+- `doc/wiki/phase3-live-test-room101-stop.md`
+
+> **สถานะต่อ:** โค้ดและเทสต์พร้อมในเครื่อง; ยังไม่แตะ Pi และต้องรอคำสั่งเปิดหน้าต่างเขียนรอบใหม่จากห้องบัญชาการ

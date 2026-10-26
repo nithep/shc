@@ -508,8 +508,8 @@ class PbxConnector extends EventEmitter {
         status: protocol.ROOM_STATUS_LABEL[protocol.ROOM_STATUS.ON],
       };
 
-      // Set guest name (if provided)
-      if (guestName) {
+      // Set guest name (only when a non-empty name is provided)
+      if (typeof guestName === 'string' && guestName.trim()) {
         try {
           const nameCmd = protocol.buildSetName(room, guestName);
           const nameResp = await this._sendWithRetry(nameCmd);
@@ -546,14 +546,6 @@ class PbxConnector extends EventEmitter {
       this._ensureReady();
       const normalizedRoom = protocol.normalizeRoom(room);
       logger.info(`Starting Check-out pipeline for room ${normalizedRoom}`, { roomNo: normalizedRoom, commandType: 'ROOM_OFF' });
-
-      // Clear guest name first
-      try {
-        const clearNameCmd = protocol.buildSetName(room, ' ');
-        await this._sendWithRetry(clearNameCmd);
-      } catch (_) {
-        // Non-critical
-      }
 
       // Set room OFF
       const roomCmd = protocol.buildSetRoom(room, protocol.ROOM_STATUS.OFF);
@@ -643,11 +635,11 @@ class PbxConnector extends EventEmitter {
    */
   async setGuestName(room, name) {
     this._assertWriteAllowed('setGuestName');
+    const cmd = protocol.buildSetName(room, name);
     return this._queue.add(async () => {
       this._ensureReady();
 
       const normalizedRoom = protocol.normalizeRoom(room);
-      const cmd = protocol.buildSetName(room, name);
       const resp = await this._sendWithRetry(cmd);
       const parsed = protocol.parseResponse(resp);
 
