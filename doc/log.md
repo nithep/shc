@@ -36,4 +36,5 @@ timestamp: "2026-06-28T02:00:00+07:00"
 | **2026-07-23** | สร้าง Skill [[.agents/skills/Librarian_OKF_Protocol/SKILL.md|Librarian_OKF_Protocol]] กำหนดตรรกะบรรณารักษ์ให้ Qoder/Agents, ทำความสะอาดลบไฟล์ขยะที่ Workspace Root และย้ายไฟล์คู่มือ 11 รายการเข้าสู่ `/docs/wiki/` | Librarian (Antigravity) |
 | **2026-08-02** | ทำ Vault Distillation (OKF): สกัดเอกสาร `HECS Walkthrough` และ `Smart Check-in QR` เข้าสู่ `/docs/wiki/`, ย้ายไฟล์ดิบไป archive, ย้าย `SETUP_QUICKSTART.md` จาก Root เข้าสู่ `/docs/wiki/setup_quickstart.md`, ลบไฟล์ขยะที่ Root, และอัปเดตดัชนี Knowledge Graph `docs/index.md` สำเร็จ 100% | Librarian Agent (Antigravity) |
 | **2026-08-02** | สรุปบทสนทนาประเมินสถาปัตยกรรม Hybrid Edge (Pi Zero 2 W) และการวิเคราะห์ Phonik ASCII Protocol (`EMG0101=BATH`) พร้อมอัปเดต Timeline บันทึกประวัติเตรียมทดสอบกดฮาร์ดแวร์จริง | Antigravity |
+| **2026-10-26** | เพิ่มความทนทานการเชื่อมต่อตู้ PBX ตั้งแต่เริ่มระบบ (initial connect failure + backoff 1–30 วิ + sync ข้ามอย่างปลอดภัย) พร้อมชุดทดสอบใหม่ 6 เคส และบันทึกองค์ความรู้ที่ [[wiki/pbx_initial_connect_resilience|ความทนทานการเชื่อมต่อตู้ PBX ตั้งแต่เริ่มระบบ]] | Senior Software Engineer (Big Pickle / OpenCode Agent) |
 

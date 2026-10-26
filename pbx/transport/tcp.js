@@ -100,67 +100,103 @@ class TcpTransport extends EventEmitter {
         return;
       }
 
+      // ทิ้ง socket เก่าที่ค้างจากรอบก่อน ก่อนเริ่ม connection ใหม่
+      if (this._socket) {
+        this._socket.removeAllListeners();
+        this._socket.destroy();
+        this._socket = null;
+      }
+
       this._host = host;
       this._port = port;
       this._buffer = '';
       this._clearPending();
 
-      this._socket = new net.Socket();
+      const socket = new net.Socket();
+      this._socket = socket;
+
+      let settled = false;
+      let connectTimer = null;
+      let bannerTimer = null;
+      let onWelcomeData = null;
+
+      const clearConnectTimers = () => {
+        if (connectTimer) {
+          clearTimeout(connectTimer);
+          connectTimer = null;
+        }
+        if (bannerTimer) {
+          clearTimeout(bannerTimer);
+          bannerTimer = null;
+        }
+      };
+
+      const removeWelcomeListener = () => {
+        if (onWelcomeData) {
+          socket.removeListener('data', onWelcomeData);
+          onWelcomeData = null;
+        }
+      };
+
+      const fail = (err) => {
+        if (settled) return;
+        settled = true;
+        clearConnectTimers();
+        removeWelcomeListener();
+        this._connected = false;
+        if (this._socket === socket) {
+          this._socket = null;
+        }
+        if (!socket.destroyed) {
+          socket.destroy();
+        }
+        reject(err);
+      };
+
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        clearConnectTimers();
+        removeWelcomeListener();
+        this._connected = true;
+        socket.on('data', (chunk) => this._onData(chunk));
+        this.emit('connected', { host, port });
+        resolve();
+      };
 
       // ── Connection timeout ──
-      const connectTimer = setTimeout(() => {
-        if (this._socket) {
-          this._socket.destroy();
-        }
-        reject(new Error(`TCP connection timeout: ${host}:${port} (${this._timeout}ms)`));
+      connectTimer = setTimeout(() => {
+        fail(new Error(`TCP connection timeout: ${host}:${port} (${this._timeout}ms)`));
       }, this._timeout);
 
       // ── Connected ──
-      this._socket.once('connect', () => {
-        clearTimeout(connectTimer);
+      socket.once('connect', () => {
+        if (settled || socket.destroyed) return;
+        if (connectTimer) {
+          clearTimeout(connectTimer);
+          connectTimer = null;
+        }
         this._connected = true;
 
         // รอรับข้อความต้อนรับ (Welcome Banner) จากระบบแลน/Telnet ก่อนเชื่อมต่อจริง
-        const bannerTimer = setTimeout(() => {
-          if (this._socket) {
-            this._socket.removeListener('data', onWelcomeData);
-            this._socket.on('data', (chunk) => this._onData(chunk));
-          }
-          this.emit('connected', { host, port });
-          resolve();
-        }, 500); // หน่วงรอรับแบนเนอร์สูงสุด 500ms
-
-        const onWelcomeData = (chunk) => {
+        onWelcomeData = (chunk) => {
           const str = chunk.toString('ascii');
           // หากข้อความที่ได้รับมีคำบ่งชี้ว่าคือระบบ Telnet/PBX ให้ละทิ้งแล้วเข้าสู่โหมดทำงานปกติทันที
           if (str.includes('Telnet') || str.includes('Phonik') || str.includes('PABX') || str.includes('system')) {
-            clearTimeout(bannerTimer);
-            if (this._socket) {
-              this._socket.removeListener('data', onWelcomeData);
-              this._socket.on('data', (chunk) => this._onData(chunk));
-            }
-            this.emit('connected', { host, port });
-            resolve();
+            succeed();
           } else {
             // กรณีเป็นข้อมูลชุดอื่น ให้เข้าสู่กระบวนการปกติและส่งต่อข้อมูลให้ประมวลผลทันที
-            clearTimeout(bannerTimer);
-            if (this._socket) {
-              this._socket.removeListener('data', onWelcomeData);
-              this._socket.on('data', (chunk) => this._onData(chunk));
-            }
-            this.emit('connected', { host, port });
-            resolve();
+            succeed();
             this._onData(chunk);
           }
         };
 
-        this._socket.on('data', onWelcomeData);
+        socket.on('data', onWelcomeData);
+        bannerTimer = setTimeout(() => succeed(), 500); // หน่วงรอรับแบนเนอร์สูงสุด 500ms
       });
 
       // ── Error handler ──
-      this._socket.on('error', (err) => {
-        clearTimeout(connectTimer);
-
+      socket.on('error', (err) => {
         /**
          * เมื่อเกิด error กับ TCP socket
          * @event TcpTransport#error
@@ -173,11 +209,19 @@ class TcpTransport extends EventEmitter {
           this._pendingReject(err);
           this._clearPending();
         }
+
+        // initial connect ต้อง reject ไม่ค้างตลอดไป
+        if (!settled) {
+          fail(err);
+        }
       });
 
       // ── Close handler ──
-      this._socket.on('close', (hadError) => {
+      socket.on('close', (hadError) => {
         this._connected = false;
+        if (this._socket === socket) {
+          this._socket = null;
+        }
 
         /**
          * เมื่อ TCP connection ถูกปิด
@@ -192,9 +236,14 @@ class TcpTransport extends EventEmitter {
           this._pendingReject(new Error('TCP connection closed while waiting for response'));
           this._clearPending();
         }
+
+        // ปิดก่อนเชื่อมต่อสำเร็จ → reject initial connect
+        if (!settled) {
+          fail(new Error(`TCP connection closed before established${hadError ? ' (socket error)' : ''}`));
+        }
       });
 
-      this._socket.connect(port, host);
+      socket.connect(port, host);
     });
   }
 

@@ -20,6 +20,7 @@ const FILES = [
     'digitaltwin_harness_path.test.js',
     'hardware_verification.test.js',
     'http_state_verification.test.js',
+    'tcp_initial_failure_reconnect.test.js',
 ];
 
 let failed = 0;

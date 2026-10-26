@@ -53,18 +53,30 @@ const pbx = createConnector({
     heartbeatInterval: PBX_MODE === 'mock' ? 0 : 30000,
 });
 
+// ─── PBX reconnect backoff (covers initial connect failure too) ───────────
+const PBX_RECONNECT_MIN_MS = 1000;
+const PBX_RECONNECT_MAX_MS = 30000;
+let pbxReconnectTimer = null;
+let pbxReconnectDelayMs = PBX_RECONNECT_MIN_MS;
+
 // Log PBX events
 pbx.on('checkin', (data) => console.log(`[PBX] ✅ Check-in:`, data));
 pbx.on('checkout', (data) => console.log(`[PBX] 🔴 Check-out:`, data));
 pbx.on('heartbeat', () => console.log(`[PBX] 💓 Heartbeat OK`));
 pbx.on('connection_lost', () => {
     console.log(`[PBX] ⚠️ Connection lost!`);
+    pbxReconnectDelayMs = PBX_RECONNECT_MIN_MS;
     if (telegramBot) telegramBot.sendSystemAlert('Connection Lost', 'การเชื่อมต่อกับตู้สาขา PBX ขาดหาย!');
     if (typeof googleNotifier !== 'undefined' && googleNotifier) googleNotifier.sendSystemAlert('Connection Lost', 'การเชื่อมต่อกับตู้สาขา PBX ขาดหาย!', true);
 });
 pbx.on('reconnecting', (d) => console.log(`[PBX] 🔄 Reconnecting (${d.attempt}/${d.maxAttempts})...`));
 pbx.on('reconnected', () => {
     console.log(`[PBX] ✅ Reconnected!`);
+    pbxReconnectDelayMs = PBX_RECONNECT_MIN_MS;
+    if (pbxReconnectTimer) {
+        clearTimeout(pbxReconnectTimer);
+        pbxReconnectTimer = null;
+    }
     if (telegramBot) telegramBot.sendSystemAlert('Connection Restored', 'เชื่อมต่อกับตู้สาขา PBX สำเร็จแล้ว');
     if (typeof googleNotifier !== 'undefined' && googleNotifier) googleNotifier.sendSystemAlert('Connection Restored', 'เชื่อมต่อกับตู้สาขา PBX สำเร็จแล้ว', false);
     syncPbxStateWithDatabase();
@@ -75,30 +87,51 @@ pbx.on('error', (err) => {
     if (typeof googleNotifier !== 'undefined' && googleNotifier) googleNotifier.sendSystemAlert('PBX Error', err.message, true);
 });
 
-// --- Periodic Reconnection Loop (Self-Healing) ---
+// --- Periodic Reconnection Loop (Self-Healing with backoff) ---
 function scheduleReconnection() {
-    console.log(`[PBX] ⏳ Scheduling automatic reconnection in 60 seconds...`);
-    setTimeout(async () => {
-        if (pbx.state === 'DISCONNECTED') {
-            console.log(`[PBX] 🔄 Periodic Reconnection Loop: Attempting to connect again...`);
-            try {
-                await pbx.connect();
-                console.log(`[PBX] ✅ Periodic Reconnection successful.`);
-                if (telegramBot) telegramBot.sendSystemAlert('PBX Connection Restored', 'ระบบ Auto-Recovery (Self-Healing) เชื่อมต่อกับตู้สาขา PBX สำเร็จแล้ว');
-                if (typeof googleNotifier !== 'undefined' && googleNotifier) googleNotifier.sendSystemAlert('PBX Connection Restored', 'ระบบ Auto-Recovery (Self-Healing) เชื่อมต่อกับตู้สาขา PBX สำเร็จแล้ว', false);
-                syncPbxStateWithDatabase();
-            } catch (err) {
-                console.error(`[PBX] ❌ Periodic Reconnection Loop failed:`, err.message);
-                scheduleReconnection(); // Retry loop
-            }
+    if (pbxReconnectTimer) return;
+    if (pbx.isReady) {
+        pbxReconnectDelayMs = PBX_RECONNECT_MIN_MS;
+        return;
+    }
+    if (pbx.state === 'DESTROYED' || pbx.state === 'DESTROYING') return;
+
+    const delay = pbxReconnectDelayMs;
+    console.log(`[PBX] ⏳ Scheduling automatic reconnection in ${delay}ms...`);
+    pbxReconnectTimer = setTimeout(async () => {
+        pbxReconnectTimer = null;
+
+        if (pbx.isReady) {
+            pbxReconnectDelayMs = PBX_RECONNECT_MIN_MS;
+            return;
         }
-    }, 60000);
+        if (pbx.state === 'CONNECTING' || pbx.state === 'RECONNECTING') {
+            scheduleReconnection();
+            return;
+        }
+        if (pbx.state === 'DESTROYED' || pbx.state === 'DESTROYING') return;
+
+        console.log(`[PBX] 🔄 Periodic Reconnection Loop: Attempting to connect again...`);
+        try {
+            await pbx.connect();
+            pbxReconnectDelayMs = PBX_RECONNECT_MIN_MS;
+            console.log(`[PBX] ✅ Periodic Reconnection successful (readOnly=${pbx.readOnly}).`);
+            if (telegramBot) telegramBot.sendSystemAlert('PBX Connection Restored', 'ระบบ Auto-Recovery (Self-Healing) เชื่อมต่อกับตู้สาขา PBX สำเร็จแล้ว');
+            if (typeof googleNotifier !== 'undefined' && googleNotifier) googleNotifier.sendSystemAlert('PBX Connection Restored', 'ระบบ Auto-Recovery (Self-Healing) เชื่อมต่อกับตู้สาขา PBX สำเร็จแล้ว', false);
+            syncPbxStateWithDatabase();
+        } catch (err) {
+            console.error(`[PBX] ❌ Periodic Reconnection Loop failed:`, err.message);
+            pbxReconnectDelayMs = Math.min(pbxReconnectDelayMs * 2, PBX_RECONNECT_MAX_MS);
+            scheduleReconnection();
+        }
+    }, delay);
+    if (pbxReconnectTimer.unref) pbxReconnectTimer.unref();
 }
 
 pbx.on('reconnect_failed', (d) => {
     console.error(`[PBX] ❌ Reconnect failed after ${d.maxAttempts} attempts.`);
-    if (telegramBot) telegramBot.sendSystemAlert('PBX Fault Alarm', `เชื่อมต่อตู้สาขา PBX ล้มเหลวต่อเนื่อง ${d.maxAttempts} ครั้ง (Host Unreachable/Timeout) - ระบบจะพยายามเชื่อมต่อใหม่แบบวนซ้ำทุก 60 วินาทีอัตโนมัติ`);
-    if (typeof googleNotifier !== 'undefined' && googleNotifier) googleNotifier.sendSystemAlert('PBX Fault Alarm', `เชื่อมต่อตู้สาขา PBX ล้มเหลวต่อเนื่อง ${d.maxAttempts} ครั้ง (Host Unreachable/Timeout) - ระบบจะพยายามเชื่อมต่อใหม่แบบวนซ้ำทุก 60 วินาทีอัตโนมัติ`, true);
+    if (telegramBot) telegramBot.sendSystemAlert('PBX Fault Alarm', `เชื่อมต่อตู้สาขา PBX ล้มเหลวต่อเนื่อง ${d.maxAttempts} ครั้ง (Host Unreachable/Timeout) - ระบบจะพยายามเชื่อมต่อใหม่แบบ backoff อัตโนมัติ (1–30 วินาที)`);
+    if (typeof googleNotifier !== 'undefined' && googleNotifier) googleNotifier.sendSystemAlert('PBX Fault Alarm', `เชื่อมต่อตู้สาขา PBX ล้มเหลวต่อเนื่อง ${d.maxAttempts} ครั้ง (Host Unreachable/Timeout) - ระบบจะพยายามเชื่อมต่อใหม่แบบ backoff อัตโนมัติ (1–30 วินาที)`, true);
     
     scheduleReconnection();
 });
@@ -438,6 +471,11 @@ function safetyBlockStatus(safetyResult) {
 
 // ─── State Synchronization (Digital Twin Loop) ────────────────────────────
 async function syncPbxStateWithDatabase() {
+    if (!pbx.isReady) {
+        console.warn('[SYNC] ⏭️ PBX unavailable — skipping sync (read failed; room state unchanged)');
+        return { success: false, skipped: true, reason: 'PBX_UNAVAILABLE' };
+    }
+
     console.log(`[SYNC] 🔄 Starting Digital Twin State Synchronization...`);
     if (pbx.readOnly) {
         console.log('[SYNC][READ_ONLY] Enabled: read/compare/log only — no PBX or DB writes');
@@ -455,6 +493,9 @@ async function syncPbxStateWithDatabase() {
                 try {
                     const isOccupied = room.status === 'occupied';
                     const pbxStatus = await pbx.getRoomStatus(room.id);
+                    if (!pbxStatus || (pbxStatus.statusLabel !== 'ON' && pbxStatus.statusLabel !== 'OFF')) {
+                        throw new Error(`PBX status unavailable for room ${room.id}`);
+                    }
                     const isPbxOn = pbxStatus.statusLabel === 'ON';
 
                     if (pbx.readOnly) {
@@ -525,7 +566,7 @@ async function syncPbxStateWithDatabase() {
                         syncResults.push({ room: room.id, action: 'OK', success: true });
                     }
                 } catch (syncErr) {
-                    console.warn(`[SYNC] ⚠️  Skipped syncing room ${room.id}:`, syncErr.message);
+                    console.warn(`[SYNC] ⚠️  Room ${room.id}: read failed — skipped (state unchanged):`, syncErr.message);
                     syncResults.push({ room: room.id, action: 'SKIPPED', success: false, error: syncErr.message });
                 }
             }
@@ -2430,23 +2471,37 @@ app.use((req, res, next) => {
     res.sendFile(path.join(__dirname, '../app/dist/index.html'));
 });
 
+// ─── Periodic Digital Twin sync (runs even while PBX is unavailable) ──────
+const SYNC_INTERVAL_MS = (() => {
+    const raw = parseInt(process.env.SHC_SYNC_INTERVAL_MS || '300000', 10);
+    return Number.isFinite(raw) && raw >= 100 ? raw : 300000;
+})();
+let syncIntervalTimer = null;
+
+function startPeriodicSync() {
+    if (syncIntervalTimer) return;
+    syncIntervalTimer = setInterval(() => {
+        console.log(`[SYNC] 🔄 Running scheduled Digital Twin Synchronization...`);
+        syncPbxStateWithDatabase();
+    }, SYNC_INTERVAL_MS);
+    if (syncIntervalTimer.unref) syncIntervalTimer.unref();
+}
+
 // Start Server — connect PBX first, then listen
 async function startServer() {
     try {
         await pbx.connect();
+        pbxReconnectDelayMs = PBX_RECONNECT_MIN_MS;
         console.log(`[PBX] ✅ Connected in ${PBX_MODE} mode (readOnly=${pbx.readOnly})`);
         // Trigger initial sync upon cold boot
         syncPbxStateWithDatabase();
-
-        // Setup periodic Digital Twin sync loop (every 5 minutes)
-        setInterval(() => {
-            console.log(`[SYNC] 🔄 Running scheduled Digital Twin Synchronization...`);
-            syncPbxStateWithDatabase();
-        }, 5 * 60 * 1000);
     } catch (err) {
         console.warn(`[PBX] ⚠️ PBX connection failed at startup: ${err.message} — server will start anyway`);
         scheduleReconnection();
     }
+
+    // Keep the sync loop alive even if the PBX is still unavailable.
+    startPeriodicSync();
 
     // Initialize daily reporting cronjob
     cronScheduler.startCronJobs(db, googleNotifier, pbx);

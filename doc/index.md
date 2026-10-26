@@ -26,6 +26,7 @@ updated: "2026-10-20T00:00:00+07:00"
 - [[wiki/PBX_Relay_Config|🛠️ คู่มือการตั้งค่าตู้สาขา PBX (Phonik Config Builder)]]
 - [[wiki/liff-checkin-process|สรุปกระบวนการทำงาน LINE LIFF Smart Check-in]]
 - [[wiki/phonik-pbx-protocol|โปรโตคอลตู้สาขา Phonik ECS และการจำลอง]]
+- [[wiki/pbx_initial_connect_resilience|🛡️ ความทนทานการเชื่อมต่อตู้ PBX ตั้งแต่เริ่มระบบ (Initial Connect Resilience)]]
 - [[wiki/smart_checkin_qr_setup|การจัดทำ QR Code ประจำห้องพักและการเข้าถึง LINE LIFF]]
 - [[wiki/system_monitoring_guide|คู่มือการตรวจสอบสถานะระบบและตู้สาขา (System Monitoring & PBX Health Check)]]
 - [[wiki/technician_pbx_manual|🔧 คู่มือช่าง: การเชื่อมต่อตู้สาขา Phonik PBX และระบบ Webhook (Technician Manual)]]

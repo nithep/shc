@@ -1699,3 +1699,28 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - `api/test/hardware_verification.test.js`, `api/test/http_state_verification.test.js`, `api/test/fault_inject_state_mismatch.js`
 - `pbx/protocol.js`, `pbx/index.js`, `pbx/test/unit/ackw_connector.test.js`
 - `api/test/run_all.js`, `api/digitaltwin_looptest.js`, `pbx/test/e2e/flow.test.js`
+
+## [2026-10-26] Phase 2 (ขั้นที่ 2) — PBX Initial Connect Resilience + Auto-Reconnect Backoff
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**บริบท:** หลังขั้นที่ 1 ตรวจมือบน Pi ผ่าน (ping ตู้ 192.168.1.91 3/3, พอร์ต 23 เปิด) พบว่า API ยังเสี่ยงล้ม/ค้างเมื่อเชื่อมตู้ครั้งแรกไม่สำเร็จ — งานนี้แก้เฉพาะฝั่งซอฟต์แวร์ ยังไม่แตะเครื่อง Pi
+
+**จุดแก้:**
+- **TCP initial connect:** `TcpTransport.connect()` reject ทุกกรณีที่ยัง handshake ไม่สำเร็จ (error/close/timeout) พร้อมทำความสะอาด socket/timer และ settle ครั้งเดียว
+- **API ไม่ล้มตามตู้:** `startServer()` catch initial connect failure แล้วเริ่ม server ต่อ; health `/health` + `/api/health` รายงาน `pbxConnected` ตาม `pbx.isReady`
+- **Backoff reconnect:** `scheduleReconnection()` หน่วง 1→2→4→8→16→30 วิ ครอบ initial failure และ `reconnect_failed`, ยกเลิก timer เมื่อเชื่อมสำเร็จ
+- **Periodic sync ปลอดภัย:** เริ่ม sync loop ได้แม้ตู้ไม่พร้อม; `syncPbxStateWithDatabase()` ข้ามทันทีเมื่อ `!pbx.isReady` และอ่านได้เฉพาะ `statusLabel` ON/OFF — read fail = SKIPPED ไม่แตะ DB
+- **ฟื้นเอง:** เมื่อตู้กลับมา ระบบเชื่อมใหม่และ sync read-only ได้เองโดยไม่รีสตาร์ต service
+
+**ผลทดสอบ:**
+- `node api/test/run_all.js` — ผ่านทุกไฟล์ **78 เคส** (เดิม 72 + ใหม่ 6)
+- `npx jest --runInBand` ใน `pbx/` — **37/37** (7 suites)
+- ชุดใหม่ `api/test/tcp_initial_failure_reconnect.test.js` ผ่าน 6/6: API ขึ้นตอนตู้ล่ม, health false, sync ข้าม, state ไม่เปลี่ยน, reconnect อัตโนมัติ, sync กลับมาหลัง reconnect
+
+**Artifacts:**
+- `api/server.js`, `pbx/transport/tcp.js`, `api/test/run_all.js`
+- `api/test/tcp_initial_failure_reconnect.test.js` (ใหม่)
+- `doc/wiki/pbx_initial_connect_resilience.md` (ใหม่), `doc/index.md`, `doc/log.md`
+
+> **สถานะต่อ:** ยังคง `PBX_MODE=mock` และ `SHC_POLICY_DRY_RUN=true` บน Pi จนห้องบัญชาการอนุมัติขั้นที่ 3; ไม่แตะ cctv-gateway/SNC
