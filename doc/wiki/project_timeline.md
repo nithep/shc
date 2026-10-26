@@ -1774,3 +1774,26 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - `doc/wiki/phase3-live-test-room101-stop.md`
 
 > **สถานะต่อ:** โค้ดและเทสต์พร้อมในเครื่อง; ยังไม่แตะ Pi และต้องรอคำสั่งเปิดหน้าต่างเขียนรอบใหม่จากห้องบัญชาการ
+
+## [2026-10-26] Phase 3 Round 2 — Live Test Room 101 PASSED 10/10
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (Big Pickle / BP — OpenCode Agent)
+
+**บริบท:** ทดสอบเขียนจริงรอบที่ 2 บน Pi4 หลังดีพลอย `fc42f24` และแก้ checkout name-frame regression ตามคำสั่ง G4 โดยใช้สายอนุมัติ `/api/rooms/control` → approve → execute เท่านั้น
+
+**ผลทดสอบ:**
+- 10/10 transitions สำเร็จ (ON 5, OFF 5) ทุกคำสั่งได้ HTTP 202 → approve 200 → execute 200
+- StateVerifier `attempts=1` ทุกครั้ง; read-back ตรงทุกครั้ง; DB ตรงทุกครั้ง
+- pcap มี control frame รวม 10 เฟรมพอดี: `..PWER101=1` 5 เฟรม และ `..PWER101=0` 5 เฟรม
+- ไม่มีเฟรม `ROOM`, `NAME`, `WAKE`, `LOCK` หรือคำสั่งห้องอื่นแม้แต่เฟรมเดียว
+- Audit events เพิ่ม 30 รายการ (10 traces × APPROVAL_REQUESTED + APPROVED + APPROVED), risk `HR-05`, source `phase3_round2`, `guest_name_provided=false`
+- สถานะสุดท้ายห้อง 101 = `vacant/power=0`; ไม่มี pending approval
+- ปิดหน้าต่างเขียนแล้ว: `PBX_READ_ONLY=true`, `SHC_POLICY_DRY_RUN=true`; sync `6 matched, 0 mismatched, 6 checked`
+- cctv-gateway PID 1070, snc-backend PID 1015, snc-pbx-listener PID 1075 ไม่ถูกแตะ; `/detect` ตอบ 200 ก่อนและหลังเปิดหน้าต่าง
+
+**หลักฐาน:**
+- `/home/ecs-agent/backup/phase3_round2_20261026_160720/` (DB before/after, pcap, transition JSON, journal, SHA-256)
+- DB SHA-256: before `9db800afffc627dcdd64c38e080e88e874254e7915a95db5527088616b7db19c` → after `d11e3ad6d077b21459465fb43997f5e7e0c4a8fb08d0a06a1536b066e4cbe40f`
+- `hotel.db.after.raw` มี SHA-256 ตรงกับ DB จริง; ตารางที่เปลี่ยนมีเพียง `approval_audit_events` (11 → 41 rows)
+
+> **สรุป:** ผ่านเกณฑ์ Phase 3 Round 2 ครบถ้วน; ระบบกลับสู่โหมด read-only/dry-run แล้ว
