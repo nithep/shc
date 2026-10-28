@@ -350,6 +350,7 @@ async function shadowDecisionLog(command, decision, extra = {}) {
                 ...command,
                 source: extra.source || command.source || 'unknown',
                 clientChannel: extra.clientChannel || command.clientChannel || 'unknown',
+                client_channel: extra.clientChannel || command.clientChannel || 'unknown',
                 room: extra.room || (Array.isArray(command.targetRooms) ? command.targetRooms[0] : command.targetRooms),
             },
             decision: decision,
@@ -357,19 +358,54 @@ async function shadowDecisionLog(command, decision, extra = {}) {
             parsedResponseFrame: extra.parsedResponseFrame || null,
             shadowMode: true,
             sent: false,
-        }).catch(() => { /* logging-only */ });
-    } catch (_) { /* logging-only */ }
+        }).catch((err) => {
+            console.error('[SHADOW] Failed to record shadow decision log:', err && err.message ? err.message : err);
+        });
+    } catch (err) {
+        console.error('[SHADOW] Failed to record shadow decision log:', err && err.message ? err.message : err);
+    }
 }
 
 // ─── Helper: Execute command through safety pipeline ──────────────────────
 async function executeWithSafety(command, executeFn) {
     const now = new Date();
+    const rooms = Array.isArray(command.targetRooms) ? command.targetRooms.filter(r => r !== '*') : [];
+    const shadowRoom = rooms[0] || command.targetRooms || null;
+    const clientChannel = command.clientChannel || 'unknown';
+
+    const recordShadow = async (resultType, details = {}, extra = {}) => {
+        try {
+            await shadowDecisionLog(command, {
+                action: command.commandType,
+                path: details.path || 'executeWithSafety',
+                result: resultType,
+                clientChannel,
+                client_channel: clientChannel,
+                simulated: details.simulated ?? Boolean(command.dryRun),
+                ...details,
+            }, {
+                room: shadowRoom,
+                clientChannel,
+                client_channel: clientChannel,
+                stateVerifierResult: extra.stateVerifierResult || null,
+                parsedResponseFrame: extra.parsedResponseFrame || null,
+                ...extra,
+            });
+        } catch (err) {
+            console.error('[SHADOW] Failed to record shadow decision log:', err && err.message ? err.message : err);
+        }
+    };
 
     // 1. Rate Limiter — ตรวจสอบทุกห้องที่ได้รับผลกระทบ
     for (const room of command.targetRooms) {
         if (room === '*') continue; // all-room จะถูก gate บล็อกอยู่แล้ว
         const rateResult = rateLimiter.check(room, now);
         if (!rateResult.allowed) {
+            await recordShadow('blocked', {
+                path: 'executeWithSafety.rateLimit',
+                reason: 'RATE_LIMITED',
+                simulated: Boolean(command.dryRun),
+            });
             return {
                 blocked: true,
                 reason: 'RATE_LIMITED',
@@ -400,6 +436,14 @@ async function executeWithSafety(command, executeFn) {
             });
         }
 
+        await recordShadow('approval_required', {
+            path: 'executeWithSafety.approvalGate',
+            reason: 'APPROVAL_REQUIRED',
+            riskCode: classification.riskCode,
+            approvalId: pending.approvalId,
+            simulated: Boolean(command.dryRun),
+        });
+
         return {
             blocked: true,
             reason: 'APPROVAL_REQUIRED',
@@ -421,6 +465,16 @@ async function executeWithSafety(command, executeFn) {
         const outcome = await executeCommandWithStateVerification(command, null, true);
         if (!outcome.success) {
             await auditStateVerificationFailure(command, outcome);
+            await recordShadow('blocked', {
+                path: 'executeWithSafety.dryRun',
+                reason: 'STATE_VERIFICATION_FAILED',
+                simulated: true,
+                outcomeSuccess: false,
+                verification: outcome.verification || null,
+            }, {
+                stateVerifierResult: outcome.verification || null,
+                parsedResponseFrame: { intended: 'simulated', sent: false, mode: 'shadow', simulated: true, parsed: outcome.verification?.parsed || null },
+            });
             return {
                 blocked: true,
                 reason: 'STATE_VERIFICATION_FAILED',
@@ -428,6 +482,16 @@ async function executeWithSafety(command, executeFn) {
                 verification: outcome.verification,
             };
         }
+
+        await recordShadow('dry_run', {
+            path: 'executeWithSafety.dryRun',
+            simulated: true,
+            outcomeSuccess: true,
+            verification: outcome.verification || null,
+        }, {
+            stateVerifierResult: outcome.verification || null,
+            parsedResponseFrame: { intended: 'dry_run_passed', sent: false, mode: 'shadow', simulated: true, parsed: outcome.verification?.parsed || null },
+        });
 
         return {
             blocked: false,
@@ -445,39 +509,27 @@ async function executeWithSafety(command, executeFn) {
 
     // 6. Execute + StateVerifier (fail closed on mismatch)
     // Shadow logging (logging-only) at checkin/checkout shared verification path
-    try {
-        const rooms = Array.isArray(command.targetRooms) ? command.targetRooms.filter(r => r !== '*') : [];
-        const shadowRoom = rooms[0] || command.targetRooms || null;
-        await shadowDecisionLog(command, {
-            action: command.commandType,
-            path: 'executeWithSafety.stateVerification',
-            clientChannel: command.clientChannel || 'unknown',
-        }, {
-            room: shadowRoom,
-            stateVerifierResult: null,
-            parsedResponseFrame: { intended: 'sent_via_executeFn', sent: false, mode: 'shadow' },
-        });
-    } catch (_) { /* ignore */ }
+    await recordShadow('pre_flight', {
+        path: 'executeWithSafety.stateVerification',
+        simulated: false,
+    }, {
+        parsedResponseFrame: { intended: 'sent_via_executeFn', sent: false, mode: 'shadow' },
+    });
 
     const outcome = await executeCommandWithStateVerification(command, executeFn, false);
-    // Shadow log with verification results
-    try {
-        const rooms = Array.isArray(command.targetRooms) ? command.targetRooms.filter(r => r !== '*') : [];
-        const shadowRoom = rooms[0] || command.targetRooms || null;
-        await shadowDecisionLog(command, {
-            action: command.commandType,
-            path: 'executeWithSafety.stateVerification',
-            clientChannel: command.clientChannel || 'unknown',
-            outcomeSuccess: outcome.success,
-        }, {
-            room: shadowRoom,
-            stateVerifierResult: outcome.verification || null,
-            parsedResponseFrame: { intended: outcome.result || null, sent: false, mode: 'shadow', parsed: outcome.verification?.parsed || null },
-        });
-    } catch (_) { /* ignore */ }
 
     if (!outcome.success) {
         await auditStateVerificationFailure(command, outcome);
+        await recordShadow('blocked', {
+            path: 'executeWithSafety.stateVerification',
+            reason: 'STATE_VERIFICATION_FAILED',
+            simulated: false,
+            outcomeSuccess: false,
+            verification: outcome.verification || null,
+        }, {
+            stateVerifierResult: outcome.verification || null,
+            parsedResponseFrame: { intended: outcome.result || null, sent: false, mode: 'shadow', simulated: false, parsed: outcome.verification?.parsed || null },
+        });
         return {
             blocked: true,
             reason: 'STATE_VERIFICATION_FAILED',
@@ -485,6 +537,16 @@ async function executeWithSafety(command, executeFn) {
             verification: outcome.verification,
         };
     }
+
+    await recordShadow('executed', {
+        path: 'executeWithSafety.stateVerification',
+        simulated: false,
+        outcomeSuccess: true,
+        verification: outcome.verification || null,
+    }, {
+        stateVerifierResult: outcome.verification || null,
+        parsedResponseFrame: { intended: outcome.result || null, sent: false, mode: 'shadow', simulated: false, parsed: outcome.verification?.parsed || null },
+    });
 
     return { blocked: false, result: outcome.result, verification: outcome.verification };
 }
@@ -1073,6 +1135,7 @@ app.post('/api/checkout', async (req, res) => {
         requestedBy: req.user.role === 'guest' ? `guest:room_${roomNumber}` : `staff:${req.user.role}`,
         dryRun: requestDryRun,
     });
+    command.clientChannel = clientChannel || command.clientChannel || 'unknown';
 
     try {
         const safetyResult = await executeWithSafety(command, async () => {

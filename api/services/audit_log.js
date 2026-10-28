@@ -46,6 +46,7 @@ function sanitizeCommandForAudit(command = {}) {
     target_rooms: targetRooms,
     requested_by: command.requestedBy || 'system:unknown',
     source: command.source || 'unknown',
+    client_channel: command.clientChannel || command.client_channel || 'unknown',
     dry_run: Boolean(command.dryRun),
     execution_mode: command.executionMode || 'unknown',
     guest_name_provided: Boolean(command.guestName),

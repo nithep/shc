@@ -10,6 +10,8 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 
+process.env.ENFORCE_SCHEDULE = process.env.ENFORCE_SCHEDULE || 'false';
+
 const FILES = [
     'migration.test.js',
     'policy_verifier.test.js',
@@ -21,6 +23,7 @@ const FILES = [
     'hardware_verification.test.js',
     'http_state_verification.test.js',
     'tcp_initial_failure_reconnect.test.js',
+    'client_channel_shadow.test.js',
 ];
 
 let failed = 0;
