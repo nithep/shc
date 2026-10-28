@@ -1797,3 +1797,57 @@ urse_call_events.db) และสร้าง Compact Payloads (event_*.json ข
 - `hotel.db.after.raw` มี SHA-256 ตรงกับ DB จริง; ตารางที่เปลี่ยนมีเพียง `approval_audit_events` (11 → 41 rows)
 
 > **สรุป:** ผ่านเกณฑ์ Phase 3 Round 2 ครบถ้วน; ระบบกลับสู่โหมด read-only/dry-run แล้ว
+
+## [2026-10-28] Phase 4A — Deployment & Shadow Mode Initial Run (Commit `f151eb6`)
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (AI Agent nithep brand)
+
+**บริบท:** ดำเนินการขั้นตอน ก (Deployment) และขั้นตอน ข (Shadow Mode Run 1) บน Raspberry Pi 4 (`192.168.1.94`) เพื่อทดสอบรันโหมดเงาในสภาพแวดล้อมจริง ภายใต้ข้อกำหนดความปลอดภัยสูงสุด: `PBX_READ_ONLY=true` และ `SHC_POLICY_DRY_RUN=true` ตลอดเวลา
+
+**ผลการดำเนินงาน:**
+- **ขั้นตอน ก ผ่านครบถ้วน:** 
+  - สำรองฐานข้อมูลไปที่ `/home/ecs-agent/backup/deploy_f151eb6_20261028/hotel.db.before` (SHA-256: `ceddbe56...`)
+  - Git pull `--ff-only` สู่ commit `f151eb6` สำเร็จ
+  - รีสตาร์ตเฉพาะ `shc-api`; ตรวจสอบ Environment จริงพบ `PBX_READ_ONLY=true`, `SHC_POLICY_DRY_RUN=true`, `tcp 192.168.1.91:23`
+  - Health check 200 OK + `pbxConnected=true`; รอบ Sync ตู้สาขาผ่าน 6 matched / 0 mismatched ทุกรอบ
+  - DB SHA-256 หลังลงตรงกับก่อนลงทุกตัวอักษร; บริการข้างเคียง 4 ตัว (cctv-gateway: 1080, snc-backend: 1012, snc-pbx-listener: 1090, snc-cloudflared: 15751) PID คงที่ ไม่ถูกแตะต้อง
+- **ขั้นตอน ข (ความปลอดภัยผ่าน 100% แต่พบบั๊กบันทึกเงา):**
+  - ฉีดคำสั่งทดสอบผ่าน LAN API ห้อง 101 จำนวน 4 คู่ (สลับ line_liff / dashboard)
+  - ความปลอดภัยผ่านหมดจด: เฟรมควบคุม PBX ใน pcap = 0, สถานะห้อง 101 ใน SQLite ไม่เปลี่ยน (`vacant`, `power=false`), ไม่มีการแตะ `/api/bookings/bind`, ไม่มี cron/auto-eviction
+  - **บั๊กที่พบ:** ตรวจไม่พบแถว `SHADOW_DECISION_LOG` เนื่องจากฟังก์ชัน `executeWithSafety` วางจุดบันทึกไว้ที่ขั้นตอนที่ 6 (หลัง early return ของ dry-run), ฝั่ง checkout ขาดการแนบ `clientChannel`, และ `sanitizeCommandForAudit` คัดกรองฟิลด์ออก
+
+---
+
+## [2026-10-29] Phase 4A Fix & Shadow Mode Run 2 PASSED (Commit `2bc374f`)
+
+**ผู้รับผิดชอบ:** Senior Software Engineer (AI Agent nithep brand)
+
+**บริบท:** แก้ไขจุดบันทึกโหมดเงาให้ครอบคลุมทุกทางออกของ `executeWithSafety` พร้อมทดสอบ Unit/Integration Test แล้ว Deploy ซ้ำและรันโหมดเงารอบที่ 2 บน Pi4
+
+**จุดแก้ไข (Commit `2bc374f`):**
+1. ครอบคลุมการบันทึก `SHADOW_DECISION_LOG` ในทุกทางออกของ `executeWithSafety` (`blocked`, `approval_required`, `dry_run`, `executed`) โดยยังคงหลัก logging-only และเพิ่ม console.error แจ้งเตือนหากบันทึกเงาล้มเหลว
+2. เติม `command.clientChannel = clientChannel || command.clientChannel || 'unknown'` ในเส้นทาง `POST /api/checkout`
+3. เพิ่ม `client_channel` เข้า whitelist ของ `sanitizeCommandForAudit` ใน `api/services/audit_log.js`
+4. เพิ่มชุดทดสอบ `api/test/client_channel_shadow.test.js` พิสูจน์การบันทึกเงาและ immutability ของฐานข้อมูลภายใต้ `SHC_POLICY_DRY_RUN=true` (ชุดทดสอบ `npm run test:shc` ผ่านครบทั้ง 11 ชุด)
+
+**ผลการทดสอบรอบที่ 2 บน Pi4 (PASSED 100%):**
+- **ขั้นตอน ก (Re-deployment):**
+  - สำรองฐานข้อมูลรอบใหม่ที่ `/home/ecs-agent/backup/deploy_2bc374f_20261029/hotel.db.before` (SHA-256: `ceddbe562432a8685009acfe50b666aaf7915f0abea046205c076b34d09c1fd9`)
+  - Git pull `--ff-only` สู่ HEAD commit `2bc374f`
+  - รีสตาร์ตเฉพาะ `shc-api` (MainPID: 20317)
+  - Process Environment ตรงตามข้อกำหนดครบถ้วน; Health Check 200 OK + `pbxConnected=true`
+  - ผลตรวจ Sync ตู้สาขาครบ 2 รอบ: 6 matched, 0 mismatched ทั้งสองรอบ
+  - ฐานข้อมูล SHA-256 ก่อน pull และหลัง restart+sync ตรงกัน 100%
+  - บริการข้างเคียง 4 ตัว (cctv-gateway: 1080, snc-backend: 1012, snc-pbx-listener: 1090, snc-cloudflared: 15751) PID ไม่เปลี่ยนแปลง
+- **ขั้นตอน ข (Shadow Mode Run 2):**
+  - จำลอง 4 คู่ (8 รายการ: Checkin 4 + Checkout 4) สำหรับห้อง 101 สลับ header `X-Client-Channel` ระหว่าง `line_liff` และ `dashboard`
+  - บันทึกแถว `SHADOW_DECISION_LOG` ครบถ้วนทั้ง 8 รายการ (IDs 79, 83, 87, 91, 95, 99, 103, 107) พร้อมค่า `client_channel` ตรงตามช่องทางที่ฉีด 100%
+  - รายงานสองชั้น (Two-Layer Audit Reporting) ตามเกณฑ์เวลาทำการ (HR-04): 
+    - ชั้นที่ 1 (ตอนรับคำสั่ง): บันทึก `SHADOW_DECISION_LOG` ด้วยผล `approval_required` (`simulated: true`)
+    - ชั้นที่ 2 (หลังอนุมัติและจำลอง execute): บันทึก `APPROVED` ด้วย `dry_run: true` (`hardware: DRY_RUN_SIMULATED`)
+  - เฟรมควบคุม PBX ไปยังตู้สาขา = 0 เฟรม (ยืนยันผ่าน tcpdump pcap บนพอร์ต 23 และ journalctl)
+  - สถานะห้อง 101 ใน SQLite ไม่มีการเปลี่ยนแปลง (`status: vacant`, `power: false`)
+  - ไม่พบข้อผิดพลาด `[SHADOW] Failed` ในระบบแม้แต่บรรทัดเดียว
+  - ไม่มีคำขอเข้าสู่ `/api/bookings/bind` และไม่มีเหตุการณ์ cron/auto-eviction รบกวนตลอดการทดสอบ
+
+> **สถานะปัจจุบัน:** Phase 4A ผ่านเกณฑ์ตรวจรับครบถ้วนทุกข้อ พร้อมปิดเฟส 4A รอคำตัดสินจากห้องบัญชาการ
