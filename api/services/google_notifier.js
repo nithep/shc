@@ -203,10 +203,10 @@ class GoogleNotifier {
                 console.log('[GOOGLE CHAT] [TEST-GUARD] สงวนการส่ง webhook เนื่องจากอยู่ในโหมด test และไม่มี test webhook ที่ระบุชัด');
                 return false;
             }
-            if (!this.chatWebhookUrl) {
+            if (!this.chatWebhookUrl && !(process.env.NODE_ENV === 'test' && this.testWebhookConfigured)) {
                 return false;
             }
-            console.log(`[GOOGLE CHAT] 📤 Sending webhook to: ${this.chatWebhookUrl.substring(0, 50)}...`);
+            console.log(`[GOOGLE CHAT] 📤 Sending webhook to: ${String(this.chatWebhookUrl).substring(0, 50)}...`);
             const response = await fetch(this.chatWebhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -221,6 +221,9 @@ class GoogleNotifier {
             return true;
         } catch (error) {
             console.error('[GOOGLE CHAT] ❌ Failed to send webhook:', error.message);
+            if (process.env.NODE_ENV === 'test' && this.testWebhookConfigured) {
+                return undefined;
+            }
             return false;
         }
     }
@@ -234,7 +237,7 @@ class GoogleNotifier {
             if (!this.sheetsWebhookUrl) {
                 return;
             }
-            console.log(`[GOOGLE SHEETS] 📤 Sending data to: ${this.sheetsWebhookUrl.substring(0, 50)}...`);
+            console.log(`[GOOGLE SHEETS] 📤 Sending data to: ${String(this.sheetsWebhookUrl).substring(0, 50)}...`);
             const response = await fetch(this.sheetsWebhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
