@@ -182,7 +182,7 @@ const GuestView: React.FC = () => {
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const res = await fetch(`${apiUrl}/api/checkin`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Client-Channel': 'web-guest' },
         body: JSON.stringify({
           roomNumber, guestName: profile.displayName,
           guestEmail: guestEmail.trim() || undefined,
@@ -212,7 +212,7 @@ const GuestView: React.FC = () => {
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const res = await fetch(`${apiUrl}/api/checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json', 'X-Client-Channel': 'web-guest', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ roomNumber }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message || d.error || 'Checkout failed'); }
@@ -232,7 +232,7 @@ const GuestView: React.FC = () => {
     try {
       const res = await fetch('/api/rooms/guest-control', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json', 'X-Client-Channel': 'web-guest', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ action: roomPower ? 'OFF' : 'ON' }),
       });
       if (!res.ok) throw new Error('สลับไฟห้องพักไม่สำเร็จ');

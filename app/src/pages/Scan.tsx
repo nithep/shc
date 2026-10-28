@@ -256,7 +256,7 @@ const Scan = () => {
         : { roomNumber: selectedRoom };
 
       const token = localStorage.getItem(`hotel_guest_token_${selectedRoom}`);
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Client-Channel': 'line_liff' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const response = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(payload) });

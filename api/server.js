@@ -140,6 +140,18 @@ pbx.on('reconnect_failed', (d) => {
 app.use(cors());
 app.use(express.json());
 
+// Helper to resolve client channel from headers (logging only; never used for auth/approval)
+function resolveClientChannel(req) {
+    try {
+        const h = req.headers ? req.headers['x-client-channel'] : undefined;
+        const ch = typeof h === 'string' ? h.trim().toLowerCase() : Array.isArray(h) ? String(h[0]).trim().toLowerCase() : '';
+        if (ch === 'line_liff' || ch === 'dashboard' || ch === 'web-guest') return ch;
+        return 'unknown';
+    } catch (_) {
+        return 'unknown';
+    }
+}
+
 // ─── Authentication & RBAC Middleware ──────────────────────────────────────
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_hotel_ecs_token_key_103r_v5';
@@ -328,6 +340,27 @@ function buildCommand(commandType, roomNumber, options = {}) {
     };
 }
 
+// ─── Helper: Shadow decision log (logging-only, no behavior change) ─────────
+async function shadowDecisionLog(command, decision, extra = {}) {
+    try {
+        await appendAuditEvent(db.db, {
+            traceId: command.traceId,
+            eventType: 'SHADOW_DECISION_LOG',
+            command: {
+                ...command,
+                source: extra.source || command.source || 'unknown',
+                clientChannel: extra.clientChannel || command.clientChannel || 'unknown',
+                room: extra.room || (Array.isArray(command.targetRooms) ? command.targetRooms[0] : command.targetRooms),
+            },
+            decision: decision,
+            stateVerifierResult: extra.stateVerifierResult || null,
+            parsedResponseFrame: extra.parsedResponseFrame || null,
+            shadowMode: true,
+            sent: false,
+        }).catch(() => { /* logging-only */ });
+    } catch (_) { /* logging-only */ }
+}
+
 // ─── Helper: Execute command through safety pipeline ──────────────────────
 async function executeWithSafety(command, executeFn) {
     const now = new Date();
@@ -411,7 +444,38 @@ async function executeWithSafety(command, executeFn) {
     }
 
     // 6. Execute + StateVerifier (fail closed on mismatch)
+    // Shadow logging (logging-only) at checkin/checkout shared verification path
+    try {
+        const rooms = Array.isArray(command.targetRooms) ? command.targetRooms.filter(r => r !== '*') : [];
+        const shadowRoom = rooms[0] || command.targetRooms || null;
+        await shadowDecisionLog(command, {
+            action: command.commandType,
+            path: 'executeWithSafety.stateVerification',
+            clientChannel: command.clientChannel || 'unknown',
+        }, {
+            room: shadowRoom,
+            stateVerifierResult: null,
+            parsedResponseFrame: { intended: 'sent_via_executeFn', sent: false, mode: 'shadow' },
+        });
+    } catch (_) { /* ignore */ }
+
     const outcome = await executeCommandWithStateVerification(command, executeFn, false);
+    // Shadow log with verification results
+    try {
+        const rooms = Array.isArray(command.targetRooms) ? command.targetRooms.filter(r => r !== '*') : [];
+        const shadowRoom = rooms[0] || command.targetRooms || null;
+        await shadowDecisionLog(command, {
+            action: command.commandType,
+            path: 'executeWithSafety.stateVerification',
+            clientChannel: command.clientChannel || 'unknown',
+            outcomeSuccess: outcome.success,
+        }, {
+            room: shadowRoom,
+            stateVerifierResult: outcome.verification || null,
+            parsedResponseFrame: { intended: outcome.result || null, sent: false, mode: 'shadow', parsed: outcome.verification?.parsed || null },
+        });
+    } catch (_) { /* ignore */ }
+
     if (!outcome.success) {
         await auditStateVerificationFailure(command, outcome);
         return {
@@ -790,6 +854,7 @@ app.post('/api/bookings/bind', (req, res) => {
 
 // ─── Check-in (ผ่าน Safety Pipeline) ──────────────────────────────────────
 app.post('/api/checkin', async (req, res) => {
+    const clientChannel = resolveClientChannel(req);
     const { roomNumber, guestName, guestEmail, dryRun, dry_run, days, pdpaConsent } = req.body;
     const requestDryRun = Boolean(dryRun || dry_run);
     const effectiveDryRun = resolveDryRun(requestDryRun);
@@ -826,12 +891,13 @@ app.post('/api/checkin', async (req, res) => {
 
     console.log(`[API] Received Check-in Request for Room: ${roomNumber} (Dry-run: ${effectiveDryRun})`);
 
-    const command = buildCommand('ROOM_ON', roomNumber, {
-        source: 'checkin_flow',
-        flow: 'checkin',
-        guestName,
-        dryRun: requestDryRun,
-    });
+        const command = buildCommand('ROOM_ON', roomNumber, {
+            source: 'checkin_flow',
+            flow: 'checkin',
+            guestName,
+            dryRun: requestDryRun,
+        });
+        command.clientChannel = clientChannel || command.clientChannel || 'unknown';
 
     try {
         const safetyResult = await executeWithSafety(command, async () => {
@@ -968,6 +1034,7 @@ app.post('/api/rooms/:id/extend', verifyStaffToken, async (req, res) => {
 
 // ─── Check-out (ผ่าน Safety Pipeline) ─────────────────────────────────────
 app.post('/api/checkout', async (req, res) => {
+    const clientChannel = resolveClientChannel(req);
     const { roomNumber, dryRun, dry_run } = req.body;
     const requestDryRun = Boolean(dryRun || dry_run);
     const effectiveDryRun = resolveDryRun(requestDryRun);
@@ -1252,6 +1319,7 @@ app.get('/api/policy/decisions', verifyOwnerToken, (req, res) => {
 
 // ─── Control Webhook (สำหรับ AppSheet / แอดมินบังคับเปิด-ปิด) ─────────────
 app.post('/api/rooms/control', verifyStaffToken, async (req, res) => {
+    const clientChannel = resolveClientChannel(req);
     const { roomNumber, action, source, dryRun } = req.body;
     const effectiveDryRun = resolveDryRun(Boolean(dryRun));
     
@@ -1269,11 +1337,14 @@ app.post('/api/rooms/control', verifyStaffToken, async (req, res) => {
         flow: 'force_control',
         dryRun: Boolean(dryRun),
     });
+    command.clientChannel = clientChannel || command.clientChannel || 'unknown';
+    command.reqSource = reqSource;
 
     try {
         const safetyResult = await executeWithSafety(command, async () => {
             if (commandType === 'ROOM_ON') {
-                return await pbx.checkIn(roomNumber, 'Force ON');
+            const forceSource = command.reqSource || reqSource || source || 'appsheet_webhook';
+            return await pbx.checkIn(roomNumber, `Force ON (${forceSource})`);
             } else {
                 return await pbx.checkOut(roomNumber);
             }
@@ -1301,7 +1372,7 @@ app.post('/api/rooms/control', verifyStaffToken, async (req, res) => {
             
             // Notify via Google Chat
             if (commandType === 'ROOM_ON') {
-                googleNotifier.sendCheckinAlert({ roomNumber, guestName: 'Force ON (AppSheet)' });
+                googleNotifier.sendCheckinAlert({ roomNumber, guestName: `Force ON (${reqSource})` });
             } else {
                 googleNotifier.sendCheckoutAlert({ roomNumber });
             }
@@ -1324,6 +1395,7 @@ app.post('/api/rooms/control', verifyStaffToken, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 app.post('/api/v1/external/checkin', externalApiLimiter, (req, res) => {
+    const clientChannel = resolveClientChannel(req);
     const apiKey = req.headers['x-api-key'];
     if (!apiKey) {
         return res.status(401).json({ 
@@ -1363,6 +1435,7 @@ app.post('/api/v1/external/checkin', externalApiLimiter, (req, res) => {
             guestName,
             dryRun: Boolean(dryRun),
         });
+        command.clientChannel = clientChannel || command.clientChannel || 'unknown';
 
         try {
             const safetyResult = await executeWithSafety(command, async () => {
@@ -1429,6 +1502,7 @@ app.post('/api/v1/external/checkin', externalApiLimiter, (req, res) => {
 
 // External checkout endpoint
 app.post('/api/v1/external/checkout', externalApiLimiter, (req, res) => {
+    const clientChannel = resolveClientChannel(req);
     const apiKey = req.headers['x-api-key'];
     if (!apiKey) {
         return res.status(401).json({ error: 'API Key is required' });
@@ -1451,6 +1525,8 @@ app.post('/api/v1/external/checkout', externalApiLimiter, (req, res) => {
             flow: 'checkout',
             dryRun: Boolean(dryRun),
         });
+        command.clientChannel = clientChannel || command.clientChannel || 'unknown';
+        command.clientChannel = clientChannel || command.clientChannel || 'unknown';
 
         try {
             const safetyResult = await executeWithSafety(command, async () => {

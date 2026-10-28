@@ -97,6 +97,8 @@ async function startServer({ port, dbPath, dryRun, forceMismatch }) {
         SHC_PRESENCE_MQTT_URL: '',
         SHC_PRESENCE_MQTT_USER: '',
         SHC_PRESENCE_MQTT_PASS: '',
+        GOOGLE_CHAT_WEBHOOK_URL: '',
+        GOOGLE_SHEETS_WEBHOOK_URL: '',
     };
 
     if (forceMismatch) {

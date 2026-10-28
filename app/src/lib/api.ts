@@ -26,6 +26,8 @@ apiClient.interceptors.request.use(
     
     // Add request timestamp for audit trail
     config.headers['X-Request-Timestamp'] = new Date().toISOString();
+    // Client channel header (logging only; backend ignores/masks if missing/invalid)
+    config.headers['X-Client-Channel'] = config.headers['X-Client-Channel'] || 'dashboard';
 
     return config;
   },
