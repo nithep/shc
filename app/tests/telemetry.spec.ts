@@ -2,26 +2,36 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Telemetry Dashboard', () => {
   test('should display CPU and RAM telemetry data', async ({ page }) => {
-    // Navigate to the Dashboard
-    await page.goto('/dashboard');
+    await page.addInitScript(() => {
+      localStorage.setItem('auth_token', 'owner-token');
+      localStorage.setItem('user_role', 'owner');
+    });
 
-    // Check if the Telemetry section is visible
-    const telemetrySection = page.getByRole('heading', { name: /System Status/i });
-    // In our UI, it might be "Terminal" or similar. Let's wait for the terminal container.
-    // Assuming we have some classes or text. We'll adjust the locators based on the UI.
-    
-    // For now, let's just ensure the page loads and has a basic element
+    await page.route('**/api/rooms', (route) =>
+      route.fulfill({ json: { success: true, rooms: [] } })
+    );
+    await page.route('**/api/admin/approval', (route) =>
+      route.fulfill({ json: { success: true, pending: [] } })
+    );
+    await page.route('**/api/diagnostics/health', (route) =>
+      route.fulfill({
+        json: { success: true, report: { pbx: { mode: 'mock', isReady: true, details: '' } } },
+      })
+    );
+    await page.route('**/api/audit/events**', (route) =>
+      route.fulfill({ json: { success: true, events: [] } })
+    );
+    await page.route('**/api/admin/apikeys**', (route) =>
+      route.fulfill({ json: { success: true, keys: [] } })
+    );
+    await page.route('**/api/telemetry/stream', (route) =>
+      route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: '' })
+    );
+
+    await page.goto('/admin/dashboard');
+
     await expect(page).toHaveTitle(/Hotel/i);
-    
-    // The SSE mock test will be added here once we understand the exact UI elements
-    // In a real E2E test, we would intercept the SSE endpoint, but Playwright doesn't 
-    // natively intercept SSE streams easily without some custom setup.
-    // An alternative is just to check if the UI elements for CPU and RAM exist.
-    
-    const cpuText = page.locator('text=CPU');
-    const ramText = page.locator('text=RAM');
-    
-    await expect(cpuText).toBeVisible();
-    await expect(ramText).toBeVisible();
+    await expect(page.getByText('CPU Usage')).toBeVisible();
+    await expect(page.getByText('RAM Usage')).toBeVisible();
   });
 });

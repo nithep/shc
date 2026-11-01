@@ -21,6 +21,7 @@ import TerminalStatus from '../components/TerminalStatus';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import BookingModal from '../components/BookingModal';
+import { canCheckout } from '../lib/roles';
 
 interface Room {
   id: number;
@@ -588,7 +589,7 @@ const Dashboard = () => {
 
                       <div className="flex justify-end items-end gap-1">
                         {/* Admin controls for owner/front_desk */}
-                        {(role === 'owner' || role === 'front_desk') && (
+                        {canCheckout(role) && (
                           <>
                             {isOccupied && (
                               <button
@@ -624,7 +625,7 @@ const Dashboard = () => {
                         )}
                         
                         {/* Create Booking for Vacant Rooms (Staff/Admin) */}
-                        {!isOccupied && (role === 'owner' || role === 'front_desk') && (
+                        {!isOccupied && canCheckout(role) && (
                           <button
                             onClick={() => {
                               setSelectedRoomForBooking(room.id);

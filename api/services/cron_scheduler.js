@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { config, idleThresholdForRoom } = require('./shc_policy_config');
+const { config, idleThresholdForRoom, resolveDryRun } = require('./shc_policy_config');
 
 /**
  * เริ่มต้นระบบ Cronjob เพื่อรายงานสรุปประจำวัน
@@ -47,6 +47,11 @@ async function runAutoEviction(db, googleNotifier, pbx) {
             if (room.checkout_date) {
                 const checkoutDate = new Date(room.checkout_date);
                 if (checkoutDate <= now) {
+                    if (resolveDryRun(false)) {
+                        console.log(`[CRON] 🧪 Auto-eviction dry-run: Room ${room.id} (Checkout date: ${room.checkout_date}) simulated, no PBX command`);
+                        continue;
+                    }
+
                     console.log(`[CRON] ⚡ Auto-evicting Room ${room.id} (Checkout date: ${room.checkout_date})`);
                     
                     try {
@@ -197,6 +202,7 @@ async function generateAndSendReport(db, googleNotifier, pbx) {
 module.exports = {
     startCronJobs,
     generateAndSendReport,
+    runAutoEviction,
     startPresenceIdleCheck,
     runPresenceIdleRound
 };

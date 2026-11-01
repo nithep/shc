@@ -7,6 +7,7 @@ import {
   CheckCircle2, Wifi, Phone, Clock, BedDouble, Zap, ZapOff,
   Shield, BadgeCheck, QrCode, User
 } from 'lucide-react';
+import { clearGuestToken, getGuestToken, setGuestToken } from '../lib/guestToken';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Profile {
@@ -123,7 +124,7 @@ const GuestView: React.FC = () => {
           const p = await liff.getProfile();
           setProfile({ displayName: p.displayName, pictureUrl: p.pictureUrl, userId: p.userId });
           // Check existing session
-          const token = localStorage.getItem(`hotel_hotel_guest_token_${roomNumber}`);
+          const token = getGuestToken(roomNumber);
           setStatus(token ? 'checked-in' : 'pre-checkin');
           if (token) { fetchRoomStatus(); startCountdown(); }
         } else {
@@ -155,7 +156,7 @@ const GuestView: React.FC = () => {
       if (!checkoutStr) return;
       const diff = new Date(checkoutStr).getTime() - Date.now();
       if (diff <= 0) {
-        localStorage.removeItem(`hotel_hotel_guest_token_${roomNumber}`);
+        clearGuestToken(roomNumber);
         localStorage.removeItem(`hotel_hotel_guest_checkout_${roomNumber}`);
         setStatus('pre-checkin');
         showError('สิทธิ์ควบคุมห้องพักหมดอายุแล้ว');
@@ -192,7 +193,7 @@ const GuestView: React.FC = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Check-in failed');
       if (data.token) {
-        localStorage.setItem(`hotel_hotel_guest_token_${roomNumber}`, data.token);
+        setGuestToken(roomNumber, data.token);
         const checkoutDate = data.checkoutDate || (() => { const t = new Date(); t.setDate(t.getDate() + 1); t.setHours(12,0,0,0); return t.toISOString(); })();
         localStorage.setItem(`hotel_hotel_guest_checkout_${roomNumber}`, checkoutDate);
         setRoomPower(true);
@@ -208,7 +209,7 @@ const GuestView: React.FC = () => {
     if (!roomNumber) return;
     setActionLoading(true); setError(null);
     try {
-      const token = localStorage.getItem(`hotel_hotel_guest_token_${roomNumber}`);
+      const token = getGuestToken(roomNumber);
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const res = await fetch(`${apiUrl}/api/checkout`, {
         method: 'POST',
@@ -216,7 +217,7 @@ const GuestView: React.FC = () => {
         body: JSON.stringify({ roomNumber }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.message || d.error || 'Checkout failed'); }
-      localStorage.removeItem(`hotel_hotel_guest_token_${roomNumber}`);
+      clearGuestToken(roomNumber);
       localStorage.removeItem(`hotel_hotel_guest_checkout_${roomNumber}`);
       setStatus('pre-checkin');
       setRoomPower(false);
@@ -228,7 +229,7 @@ const GuestView: React.FC = () => {
   const handleTogglePower = async () => {
     if (!roomNumber) return;
     setActionLoading(true); setError(null);
-    const token = localStorage.getItem(`hotel_hotel_guest_token_${roomNumber}`);
+    const token = getGuestToken(roomNumber);
     try {
       const res = await fetch('/api/rooms/guest-control', {
         method: 'POST',

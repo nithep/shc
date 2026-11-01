@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "playwright test",
+    "test:session": "playwright test tests/session_token_flows.spec.ts",
     "preview": "vite preview --host 0.0.0.0 --port 5173",
     "deploy": "firebase deploy --only hosting"
   },

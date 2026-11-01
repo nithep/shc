@@ -17,6 +17,7 @@ const FILES = [
     'policy_verifier.test.js',
     'presence_subscriber.test.js',
     'cron_idle_checker.test.js',
+    'cron_auto_eviction_dry_run.test.js',
     'policy_state_verifier.test.js',
     'dry_run_precedence.test.js',
     'digitaltwin_harness_path.test.js',
@@ -24,6 +25,7 @@ const FILES = [
     'http_state_verification.test.js',
     'tcp_initial_failure_reconnect.test.js',
     'client_channel_shadow.test.js',
+    'checkout_auth_fail_log.test.js',
 ];
 
 let failed = 0;

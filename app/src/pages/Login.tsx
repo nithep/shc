@@ -15,9 +15,9 @@ const Login = () => {
   useEffect(() => {
     setPin('');
     if (token) {
-      if (role === 'admin') {
+      if (role === 'admin' || role === 'owner') {
         navigate('/admin', { replace: true });
-      } else if (role === 'staff') {
+      } else if (role === 'staff' || role === 'front_desk') {
         navigate('/staff/dashboard', { replace: true });
       }
     }
@@ -34,16 +34,19 @@ const Login = () => {
       const { success, token, role } = response.data;
 
       if (success && token) {
-        // Map backend roles -> frontend roles
-        const mappedRole: UserRole =
-          role === 'owner' ? 'admin' :
-          role === 'front_desk' ? 'staff' : 'guest';
+        const userRole: UserRole =
+          role === 'owner' ||
+          role === 'front_desk' ||
+          role === 'admin' ||
+          role === 'staff' ||
+          role === 'guest'
+            ? role
+            : 'guest';
 
         setToken(token);
-        setRole(mappedRole);
+        setRole(userRole);
 
-        // Redirect based on role
-        if (mappedRole === 'admin') {
+        if (userRole === 'admin' || userRole === 'owner') {
           navigate('/admin');
         } else {
           navigate('/staff/dashboard');

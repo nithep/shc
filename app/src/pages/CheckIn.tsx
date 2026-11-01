@@ -7,6 +7,7 @@ import {
   Hotel, Sparkles, KeyRound, Clock, BadgeCheck
 } from 'lucide-react';
 import { api, pdpa } from '../lib/api';
+import { setGuestToken } from '../lib/guestToken';
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 interface CheckInData {
@@ -140,12 +141,15 @@ const CheckIn: React.FC = () => {
     if (!checkInData?.guestName.trim()) { setError('กรุณากรอกชื่อผู้เข้าพัก'); return; }
     setLoading(true); setError('');
     try {
-      await api.checkIn({
+      const response = await api.checkIn({
         roomNumber: checkInData.roomNumber,
         guestName: checkInData.guestName,
         guestEmail: checkInData.guestEmail,
         pdpaConsent: { privacyPolicyAccepted: true, acceptedAt: new Date().toISOString() },
       });
+      if (response.data?.token) {
+        setGuestToken(checkInData.roomNumber, response.data.token);
+      }
       pdpa.setConsentGiven(true);
       setStep('done');
     } catch (err: any) {

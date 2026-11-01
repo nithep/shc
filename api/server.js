@@ -152,6 +152,13 @@ function resolveClientChannel(req) {
     }
 }
 
+function logCheckoutAuthFailure(req, roomNumber, result) {
+    const channel = resolveClientChannel(req);
+    const hasAuthHeader = Boolean(req.headers && req.headers['authorization']);
+    const safeRoom = String(roomNumber || 'unknown').replace(/[\r\n]/g, '');
+    console.log(`[AUTH_FAIL] path=/api/checkout room=${safeRoom} channel=${channel} hasAuthHeader=${hasAuthHeader} result=${result}`);
+}
+
 // ─── Authentication & RBAC Middleware ──────────────────────────────────────
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_hotel_ecs_token_key_103r_v5';
@@ -1110,6 +1117,7 @@ app.post('/api/checkout', async (req, res) => {
     const token = authHeader && authHeader.split(' ')[1];
     
     if (!token) {
+        logCheckoutAuthFailure(req, roomNumber, '401_no_token');
         return res.status(401).json({ error: 'Access token is required for check-out' });
     }
     
@@ -1120,10 +1128,12 @@ app.post('/api/checkout', async (req, res) => {
         const isMatchingGuest = decoded.role === 'guest' && String(decoded.roomNumber) === String(roomNumber);
         
         if (!isStaff && !isMatchingGuest) {
+            logCheckoutAuthFailure(req, roomNumber, '403_forbidden');
             return res.status(403).json({ error: 'Access denied: Unauthorized to check-out this room' });
         }
         req.user = decoded;
     } catch (err) {
+        logCheckoutAuthFailure(req, roomNumber, '403_invalid');
         return res.status(403).json({ error: 'Invalid or expired token for check-out' });
     }
 

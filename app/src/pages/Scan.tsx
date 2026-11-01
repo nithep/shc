@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { QrCode, CheckCircle2, XCircle, Bed, User, ArrowRight, CameraOff, Lock, Smartphone } from 'lucide-react';
 import liff from '@line/liff';
 import { BrowserMultiFormatReader } from '@zxing/browser';
+import { getGuestToken, resolveCheckoutToken, setGuestToken } from '../lib/guestToken';
 
 type ScanStatus =
   | 'idle'
@@ -255,7 +256,14 @@ const Scan = () => {
         ? { roomNumber: selectedRoom, guestName, pdpaConsent: { privacyPolicyAccepted: true, acceptedAt: new Date().toISOString() } }
         : { roomNumber: selectedRoom };
 
-      const token = localStorage.getItem(`hotel_guest_token_${selectedRoom}`);
+      const token = flow === 'checkout'
+        ? resolveCheckoutToken(selectedRoom)?.token
+        : getGuestToken(selectedRoom);
+      if (flow === 'checkout' && !token) {
+        setErrorMsg('ไม่พบโทเคนของห้องนี้ กรุณาเช็กอินก่อน หรือเข้าสู่ระบบพนักงาน');
+        setStatus('error');
+        return;
+      }
       const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Client-Channel': 'line_liff' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -266,7 +274,7 @@ const Scan = () => {
         setStatus('success');
       } else if (response.ok && (data.hardware_status?.success || data.success || data.message)) {
         if (data.token) {
-          localStorage.setItem(`hotel_guest_token_${selectedRoom}`, data.token);
+          setGuestToken(selectedRoom, data.token);
           localStorage.setItem('user_role', 'guest');
           const checkoutDate = data.checkoutDate || data.checkout_date;
           if (checkoutDate) {

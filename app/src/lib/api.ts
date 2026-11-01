@@ -36,6 +36,12 @@ apiClient.interceptors.request.use(
   }
 );
 
+function isAuthEndpoint(url?: string): boolean {
+  if (!url) return false;
+  const path = url.split('?')[0];
+  return /(^|\/)auth(\/|$)/.test(path);
+}
+
 // Response Interceptor - Handle errors globally
 apiClient.interceptors.response.use(
   (response) => {
@@ -48,12 +54,13 @@ apiClient.interceptors.response.use(
 
       switch (status) {
         case 401:
-          // Unauthorized - Token expired or invalid
-          console.error('[API] Unauthorized - Redirecting to login');
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('user_role');
-          window.location.href = '/login';
-          break;
+          if (isAuthEndpoint(error.config?.url) && localStorage.getItem('auth_token')) {
+            console.error('[API] Unauthorized - Redirecting to login');
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_role');
+            window.location.href = '/login';
+          }
+          throw new Error((data as any)?.error || 'ไม่ได้รับอนุญาตให้เข้าถึงทรัพยากรนี้');
 
         case 403:
           // Forbidden - Insufficient permissions
